@@ -1,0 +1,1 @@
+"""GURSAR AI application package."""

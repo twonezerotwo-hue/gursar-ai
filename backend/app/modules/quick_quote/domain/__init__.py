@@ -1,0 +1,1 @@
+"""Quick-quote domain."""

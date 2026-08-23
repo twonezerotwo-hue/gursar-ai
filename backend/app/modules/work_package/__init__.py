@@ -1,0 +1,1 @@
+"""Standard work-package module."""

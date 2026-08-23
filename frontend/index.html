@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="GÜRSAR AI ile yapım işinizi anlatın, güncel iç fiyat defterinden hızlı teklif alın."
+    />
+    <meta name="theme-color" content="#173c36" />
+    <title>GÜRSAR AI</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="GÜRSAR AI ana sayfa">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span>
+            <strong>GÜRSAR AI</strong>
+            <small>Yapının her aşamasında tek temas</small>
+          </span>
+        </a>
+        <div class="connection" id="connection-status" aria-live="polite">
+          <span class="connection-dot" aria-hidden="true"></span>
+          <span>Bağlanıyor</span>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="conversation-pane" aria-label="GÜRSAR AI görüşmesi">
+          <div class="welcome-band">
+            <p class="eyebrow">Mimarlık · İnşaat · Şantiye Yönetimi</p>
+            <h1>Ne inşa etmek istiyorsunuz?</h1>
+            <p>İşinizi doğal şekilde anlatın. Güncel birim fiyatı ve metraj varsa yaklaşık toplamı hemen paylaşalım.</p>
+            <button class="primary-action" id="talk-button" type="button">AI ile konuş</button>
+          </div>
+
+          <div class="quick-services" aria-label="Hızlı hizmet seçenekleri">
+            <button type="button" data-prompt="Kalıp işi için fiyat almak istiyorum">Kalıp</button>
+            <button type="button" data-prompt="Kaba inşaat fiyatı almak istiyorum">Kaba inşaat</button>
+            <button type="button" data-prompt="Kompozit dış cephe fiyatı almak istiyorum">Kompozit cephe</button>
+            <button type="button" data-prompt="Mantolama ve cephe boyası fiyatı almak istiyorum">Mantolama</button>
+          </div>
+
+          <div class="message-list" id="message-list" aria-live="polite" aria-label="Mesajlar">
+            <div class="loading-message">Görüşme hazırlanıyor…</div>
+          </div>
+
+          <form class="composer" id="message-form">
+            <label class="sr-only" for="message-input">Yapım işinizi anlatın</label>
+            <textarea
+              id="message-input"
+              name="message"
+              rows="1"
+              maxlength="4000"
+              placeholder="Örn. Göktürk'te 2.000 m² kompozit cephe işim var"
+              autocomplete="off"
+              required
+            ></textarea>
+            <button type="submit" id="send-button">Gönder</button>
+          </form>
+        </section>
+
+        <aside class="quote-pane" aria-label="Teklif özeti">
+          <div class="quote-heading">
+            <p class="eyebrow">Canlı özet</p>
+            <h2>İşler ve fiyatlar</h2>
+          </div>
+          <div class="quote-list" id="quote-list">
+            <div class="empty-quote">
+              <span class="empty-index">01</span>
+              <p>İş türü, konum ve metraj konuşma sırasında burada netleşir.</p>
+            </div>
+          </div>
+          <div class="trust-note">
+            <strong>GÜRSAR iç fiyat defteri</strong>
+            <span>Tekliflerde yalnızca geçerli şirket fiyatları kullanılır.</span>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <template id="message-template">
+      <article class="message">
+        <div class="message-meta"></div>
+        <div class="message-body"></div>
+      </article>
+    </template>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

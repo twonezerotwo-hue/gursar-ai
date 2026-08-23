@@ -1,0 +1,1 @@
+"""Deterministic quick-quote module."""
