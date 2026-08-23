@@ -83,5 +83,5 @@ class QuickQuoteRepository:
                 currency=row.currency,
                 vat_policy=row.vat_policy,
             )
-            for row in latest_by_job.values()
+            for row in reversed(list(latest_by_job.values()))
         ]

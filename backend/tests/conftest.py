@@ -23,6 +23,7 @@ def app() -> Generator[FastAPI]:
         understanding_provider="rule_based",
         openai_api_key=None,
         openai_model="gpt-5-mini",
+        chat_provider="deterministic",
     )
     application = create_app(settings=settings, engine=engine)
     yield application

@@ -11,6 +11,10 @@ const elements = {
   input: document.querySelector("#message-input"),
   list: document.querySelector("#message-list"),
   quotes: document.querySelector("#quote-list"),
+  summaryQuantity: document.querySelector("#summary-quantity"),
+  summaryTotal: document.querySelector("#summary-total"),
+  ledgerBreakdown: document.querySelector("#ledger-breakdown"),
+  ledgerGrandTotal: document.querySelector("#ledger-grand-total"),
   send: document.querySelector("#send-button"),
   talk: document.querySelector("#talk-button"),
   template: document.querySelector("#message-template"),
@@ -119,10 +123,67 @@ function formatQuantity(value, unit) {
 
 function renderQuotes() {
   elements.quotes.replaceChildren();
+  const quantitiesByUnit = new Map();
+  const totalsByService = new Map();
+  let progressTotal = 0;
+
+  for (const quote of state.quotes) {
+    if (quote.quantity) {
+      const values = quantitiesByUnit.get(quote.unit) || [];
+      values.push(Number(quote.quantity));
+      quantitiesByUnit.set(quote.unit, values);
+    }
+    if (quote.total_price) progressTotal += Number(quote.total_price);
+    if (quote.total_price || quote.unit_price != null) {
+      const serviceTotal = totalsByService.get(quote.service_code) || {
+        label: quote.service_label,
+        total: 0,
+        hasTotal: false,
+        unitPrice: quote.unit_price,
+        unit: quote.unit,
+      };
+      if (quote.total_price) {
+        serviceTotal.total += Number(quote.total_price);
+        serviceTotal.hasTotal = true;
+      }
+      totalsByService.set(quote.service_code, serviceTotal);
+    }
+  }
+
+  elements.summaryQuantity.textContent = quantitiesByUnit.size
+    ? [...quantitiesByUnit.entries()]
+        .map(([unit, quantities]) => {
+          const uniqueQuantities = new Set(quantities);
+          const total = [...uniqueQuantities].reduce((sum, quantity) => sum + quantity, 0);
+          return formatQuantity(total, unit);
+        })
+        .join(" · ")
+    : "—";
+  elements.summaryTotal.textContent = progressTotal ? formatMoney(progressTotal) : "—";
+  elements.ledgerGrandTotal.textContent = progressTotal ? formatMoney(progressTotal) : "—";
+  elements.ledgerBreakdown.replaceChildren();
+  if (!totalsByService.size) {
+    const empty = document.createElement("p");
+    empty.textContent = "Henüz hesaplanmış kalem yok.";
+    elements.ledgerBreakdown.append(empty);
+  } else {
+    for (const summary of totalsByService.values()) {
+      const row = document.createElement("div");
+      const label = document.createElement("span");
+      const amount = document.createElement("strong");
+      label.textContent = summary.label;
+      amount.textContent = summary.hasTotal
+        ? formatMoney(summary.total)
+        : `${formatMoney(summary.unitPrice)} / ${summary.unit === "m2" ? "m²" : summary.unit}`;
+      row.append(label, amount);
+      elements.ledgerBreakdown.append(row);
+    }
+  }
+
   if (!state.quotes.length) {
     const empty = document.createElement("div");
     empty.className = "empty-quote";
-    empty.innerHTML = '<span class="empty-index">01</span><p>İş türü, konum ve metraj konuşma sırasında burada netleşir.</p>';
+    empty.innerHTML = "<p>Metraj ve iş kalemi yazdığınızda hesap burada görünür.</p>";
     elements.quotes.append(empty);
     return;
   }
@@ -150,7 +211,9 @@ function renderQuotes() {
     const price = document.createElement("div");
     price.className = "quote-price";
     price.textContent = needsClarification
-      ? "Cephe sistemini seçin"
+      ? quote.service_code === "rough_construction.turnkey"
+        ? "Kapsamı seçin"
+        : "Sistemi seçin"
       : quote.total_price
         ? formatMoney(quote.total_price)
         : quote.unit_price
@@ -158,7 +221,11 @@ function renderQuotes() {
           : "Fiyat netleştirilecek";
     const unit = document.createElement("div");
     unit.className = "quote-unit";
-    unit.textContent = quote.quantity
+    unit.textContent = needsClarification
+      ? quote.service_code === "rough_construction.turnkey"
+        ? "Malzeme kapsamı bekleniyor"
+        : "Talep kaydedildi"
+      : quote.quantity
       ? `${formatQuantity(quote.quantity, quote.unit)} · KDV hariç`
       : quote.unit_price
         ? `Birim fiyat / ${quote.unit === "m2" ? "m²" : quote.unit} · KDV hariç`
@@ -181,6 +248,7 @@ async function sendMessage(text) {
   state.busy = true;
   elements.send.disabled = true;
   elements.input.disabled = true;
+  setConnection("loading", "AI düşünüyor");
   state.messages.push({ role: "USER", content: cleanText, pending: true });
   renderMessages();
   try {
@@ -194,9 +262,16 @@ async function sendMessage(text) {
       role: "ASSISTANT",
       content: response.assistant_text,
     });
-    state.quotes = response.quotes || [];
+    const savedQuotes = await api(
+      `/api/v1/conversations/${encodeURIComponent(state.conversationId)}/quotes`,
+    );
+    const transientQuotes = (response.quotes || []).filter(
+      (quote) => !quote.quote_id && !savedQuotes.some((saved) => saved.job_id === quote.job_id),
+    );
+    state.quotes = [...savedQuotes, ...transientQuotes];
     renderMessages();
     renderQuotes();
+    setConnection("online", "Hazır");
   } catch (error) {
     state.messages[state.messages.length - 1].pending = false;
     renderSystemError("Şu anda yanıtı hazırlayamadım. Lütfen tekrar deneyin.");

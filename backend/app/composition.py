@@ -7,6 +7,7 @@ from app.modules.conversation.infrastructure.repository import ConversationRepos
 from app.modules.customer_understanding.application.service import CustomerUnderstandingService
 from app.modules.customer_understanding.infrastructure.location import TurkishLocationNormalizer
 from app.modules.customer_understanding.infrastructure.repository import SnapshotRepository
+from app.modules.legal_knowledge.infrastructure.repository import LegalKnowledgeRepository
 from app.modules.pricing.application.service import PriceResolver
 from app.modules.pricing.infrastructure.repository import PriceBookRepository
 from app.modules.quick_quote.application.history import QuoteHistoryService
@@ -32,6 +33,8 @@ def build_quick_quote_service(session: Session, app: FastAPI) -> QuickQuoteServi
         quotes=QuickQuoteRepository(session),
         location_normalizer=TurkishLocationNormalizer(),
         default_location_code=app.state.settings.default_location_code,
+        construction_chat_provider=app.state.construction_chat_provider,
+        legal_knowledge=LegalKnowledgeRepository(session),
     )
 
 

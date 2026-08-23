@@ -12,7 +12,7 @@ Unknown fields are rejected.
   "jobs": [
     {
       "job_reference": null,
-      "service_candidate": "formwork.standard.turnkey",
+      "service_candidate": "formwork.labor",
       "service_confidence": 0.98,
       "quantity": { "value": 4000, "unit": "m2" },
       "location": {

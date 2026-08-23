@@ -11,6 +11,9 @@ from app.bootstrap import initialize_database
 from app.core.config import Settings
 from app.core.database import create_database_engine, create_session_factory
 from app.core.logging import configure_logging
+from app.modules.construction_chat.infrastructure.ollama import (
+    OllamaConstructionChatProvider,
+)
 from app.modules.conversation.api.router import router as conversation_router
 from app.modules.customer_understanding.infrastructure.openai import (
     OpenAICustomerUnderstandingProvider,
@@ -18,6 +21,7 @@ from app.modules.customer_understanding.infrastructure.openai import (
 from app.modules.customer_understanding.infrastructure.rule_based import (
     RuleBasedCustomerUnderstandingProvider,
 )
+from app.modules.legal_knowledge.infrastructure.repository import LegalKnowledgeRepository
 from app.modules.pricing.api.router import router as price_router
 from app.modules.qr.api.router import router as qr_router
 
@@ -42,6 +46,7 @@ def create_app(*, settings: Settings | None = None, engine: Engine | None = None
     application.state.engine = database_engine
     application.state.session_factory = session_factory
     application.state.understanding_provider = _build_provider(actual_settings)
+    application.state.construction_chat_provider = _build_chat_provider(actual_settings)
 
     application.include_router(qr_router)
     application.include_router(conversation_router)
@@ -49,7 +54,18 @@ def create_app(*, settings: Settings | None = None, engine: Engine | None = None
 
     @application.get("/api/health", tags=["system"])
     def health() -> dict[str, str]:
-        return {"status": "ok", "service": "gursar-ai"}
+        chat_provider = application.state.construction_chat_provider
+        with session_factory() as session:
+            legal_documents, legal_chunks = LegalKnowledgeRepository(session).counts()
+        return {
+            "status": "ok",
+            "service": "gursar-ai",
+            "chat_provider": (
+                chat_provider.provider_name if chat_provider is not None else "deterministic"
+            ),
+            "legal_documents": str(legal_documents),
+            "legal_chunks": str(legal_chunks),
+        }
 
     application.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
@@ -78,6 +94,16 @@ def _build_provider(settings: Settings):
             model=settings.openai_model,
         )
     return RuleBasedCustomerUnderstandingProvider()
+
+
+def _build_chat_provider(settings: Settings):
+    if settings.chat_provider == "ollama":
+        return OllamaConstructionChatProvider(
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+            timeout_seconds=settings.ollama_timeout_seconds,
+        )
+    return None
 
 
 app = create_app()

@@ -5,6 +5,7 @@ from app.modules.conversation.infrastructure.models import (
     MessageORM,
 )
 from app.modules.customer_understanding.infrastructure.models import AnalysisSnapshotORM
+from app.modules.legal_knowledge.infrastructure.models import LegalChunkORM, LegalDocumentORM
 from app.modules.pricing.infrastructure.models import PriceBookORM
 from app.modules.qr.infrastructure.models import QRSourceORM
 from app.modules.quick_quote.infrastructure.models import QuickQuoteORM
@@ -16,6 +17,8 @@ __all__ = [
     "AuditEventORM",
     "ConversationORM",
     "CustomerJobORM",
+    "LegalChunkORM",
+    "LegalDocumentORM",
     "MessageORM",
     "OutboxEventORM",
     "PriceBookORM",

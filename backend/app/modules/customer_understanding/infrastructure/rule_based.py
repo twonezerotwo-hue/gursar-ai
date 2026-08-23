@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from decimal import Decimal
+from difflib import SequenceMatcher
 
 from app.contracts.v1.customer_understanding import (
     FACADE_SERVICE_CONSTRAINT,
@@ -19,10 +20,24 @@ from app.modules.customer_understanding.infrastructure.location import (
 )
 
 SERVICE_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "formwork.labor_material",
+        (
+            "kalip malzemesi dahil",
+            "malzeme dahil kalip",
+            "malzemeli kalip",
+            "kalip isciligi malzeme dahil",
+        ),
+    ),
+    (
+        "reinforcement.labor",
+        ("demir isciligi", "donati isciligi", "demirci isciligi", "demir", "donati"),
+    ),
+    ("masonry.labor", ("duvar isciligi", "duvar orme isciligi", "duvar orme", "duvar")),
+    ("formwork.labor", ("kalip isciligi", "kalip", "kalib", "formwork")),
     ("facade.insulation_paint.turnkey", ("mantolama", "isi yalitim", "yalitim boya")),
     ("facade.composite.turnkey", ("kompozit", "composite facade")),
     ("rough_construction.turnkey", ("kaba insaat", "rough construction")),
-    ("formwork.standard.turnkey", ("kalip", "kalib", "formwork")),
     ("architecture.design", ("mimari", "tasarim", "architecture")),
     ("site_management.licensed", ("santiye sefi", "licensed site management")),
     ("site_management.standard", ("santiye yonet", "site management")),
@@ -31,6 +46,13 @@ SERVICE_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("consultancy.technical", ("danisman", "consultancy")),
     ("construction.general", ("insaat", "construction")),
 )
+
+FUZZY_SERVICE_TOKENS = {
+    "demir": "reinforcement.labor",
+    "donati": "reinforcement.labor",
+    "kalip": "formwork.labor",
+    "duvar": "masonry.labor",
+}
 
 FACADE_AMBIGUITY_PATTERNS = (
     "dis cephe",
@@ -82,6 +104,16 @@ class RuleBasedCustomerUnderstandingProvider:
     ) -> JobUnderstandingV1:
         folded = fold_text(segment)
         service_code = self._detect_service(folded)
+        if (
+            service_code is None
+            and any(
+                pattern in folded
+                for pattern in ("malzeme dahil", "malzemeyi de ekle", "malzeme de dahil")
+            )
+            and len(context.jobs) == 1
+            and context.jobs[0].service_code == "formwork.labor"
+        ):
+            service_code = "formwork.labor_material"
         quantity = self._detect_quantity(segment)
         location = self._detect_location(folded)
         constraints = []
@@ -123,8 +155,13 @@ class RuleBasedCustomerUnderstandingProvider:
             )
 
         job_reference = None
-        if len(segments := context.jobs) == 1 and not service_code:
-            job_reference = segments[0].job_id
+        if (
+            context.jobs
+            and not service_code
+            and quantity is not None
+            and self._looks_like_quantity_only(folded)
+        ):
+            job_reference = context.jobs[-1].job_id
 
         return JobUnderstandingV1(
             job_reference=job_reference,
@@ -140,10 +177,24 @@ class RuleBasedCustomerUnderstandingProvider:
 
     @staticmethod
     def _detect_service(folded: str) -> str | None:
+        if "kaba insaat" in folded:
+            return "rough_construction.turnkey"
         for service_code, patterns in SERVICE_PATTERNS:
             if any(pattern in folded for pattern in patterns):
                 return service_code
+        for token in re.findall(r"[a-z0-9]+", folded):
+            if len(token) < 4:
+                continue
+            for expected, service_code in FUZZY_SERVICE_TOKENS.items():
+                if SequenceMatcher(None, token, expected).ratio() >= 0.78:
+                    return service_code
         return None
+
+    @staticmethod
+    def _looks_like_quantity_only(folded: str) -> bool:
+        remainder = QUANTITY_PATTERN.sub("", folded)
+        remainder = re.sub(r"\b(olsun|hesapla|hesaplayalim|yap|metraj)\b", "", remainder)
+        return not remainder.strip(" .,;:-_+")
 
     @staticmethod
     def _detect_quantity(segment: str) -> QuantityV1 | None:

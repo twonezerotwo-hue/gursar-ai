@@ -23,6 +23,14 @@ from app.modules.work_package.domain.models import (
 from app.modules.work_package.infrastructure.repository import WorkPackageRepository
 
 SERVICES = (
+    ("reinforcement.labor", "Demir İşçiliği", "Reinforcement Labor"),
+    ("formwork.labor", "Kalıp İşçiliği", "Formwork Labor"),
+    (
+        "formwork.labor_material",
+        "Kalıp İşçiliği ve Malzemesi",
+        "Formwork Labor and Material",
+    ),
+    ("masonry.labor", "Duvar İşçiliği", "Masonry Labor"),
     ("formwork.standard.turnkey", "Standart Kalıp", "Standard Formwork"),
     ("rough_construction.turnkey", "Kaba İnşaat", "Rough Construction"),
     ("facade.composite.turnkey", "Kompozit Cephe", "Composite Facade"),
@@ -62,11 +70,38 @@ def seed_reference_data(session: Session) -> None:
     prices = PriceBookRepository(session)
     _seed_price(
         prices,
-        service_code="formwork.standard.turnkey",
-        location_scope="TR/ISTANBUL",
-        price=Decimal("1350"),
+        service_code="reinforcement.labor",
+        location_scope="TR",
+        price=Decimal("500"),
         unit="m2",
-        notes="V1 internal price-book seed from approved formwork scenario.",
+        notes="User-provided temporary reinforcement labor price on 2026-08-23.",
+    )
+    _seed_price(
+        prices,
+        service_code="formwork.labor",
+        location_scope="TR",
+        price=Decimal("700"),
+        unit="m2",
+        notes="User-provided temporary formwork labor price on 2026-08-23.",
+    )
+    _seed_price(
+        prices,
+        service_code="formwork.labor_material",
+        location_scope="TR",
+        price=Decimal("925"),
+        unit="m2",
+        notes=(
+            "User-provided temporary composite price: 700 TRY/m2 formwork labor plus "
+            "225 TRY/m2 formwork material on 2026-08-23."
+        ),
+    )
+    _seed_price(
+        prices,
+        service_code="masonry.labor",
+        location_scope="TR",
+        price=Decimal("200"),
+        unit="m2",
+        notes="User-provided temporary masonry labor price on 2026-08-23.",
     )
     _seed_price(
         prices,
@@ -145,6 +180,79 @@ def _item(
 
 def _initial_work_packages() -> list[WorkPackage]:
     return [
+        WorkPackage(
+            id=new_id(),
+            service_code="reinforcement.labor",
+            version=1,
+            customer_scope_summaries={
+                "tr": "Demir malzemesi hariç, yalnız demir bağlama işçiliğidir.",
+                "en": "Reinforcement fixing labor only; reinforcement material is excluded.",
+            },
+            items=[
+                _item("labor.reinforcement", "Demir bağlama işçiliği", 1),
+                _item(
+                    "material.reinforcement",
+                    "Demir malzemesi",
+                    2,
+                    supply_by=SupplyBy.CUSTOMER,
+                    default_included=False,
+                    pricing_role=PricingRole.EXCLUSION,
+                ),
+            ],
+        ),
+        WorkPackage(
+            id=new_id(),
+            service_code="formwork.labor",
+            version=1,
+            customer_scope_summaries={
+                "tr": "Kalıp malzemesi hariç, yalnız kalıp işçiliğidir.",
+                "en": "Formwork labor only; formwork material is excluded.",
+            },
+            items=[
+                _item("labor.formwork", "Kalıp işçiliği", 1),
+                _item(
+                    "material.formwork",
+                    "Kalıp malzemesi",
+                    2,
+                    supply_by=SupplyBy.CUSTOMER,
+                    default_included=False,
+                    pricing_role=PricingRole.EXCLUSION,
+                ),
+            ],
+        ),
+        WorkPackage(
+            id=new_id(),
+            service_code="formwork.labor_material",
+            version=1,
+            customer_scope_summaries={
+                "tr": "Kalıp işçiliği ile kalıp malzemesi dahildir.",
+                "en": "Formwork labor and formwork material are included.",
+            },
+            items=[
+                _item("labor.formwork", "Kalıp işçiliği", 1),
+                _item("material.formwork", "Kalıp malzemesi", 2),
+            ],
+        ),
+        WorkPackage(
+            id=new_id(),
+            service_code="masonry.labor",
+            version=1,
+            customer_scope_summaries={
+                "tr": "Duvar malzemesi hariç, yalnız duvar örme işçiliğidir.",
+                "en": "Masonry labor only; masonry material is excluded.",
+            },
+            items=[
+                _item("labor.masonry", "Duvar örme işçiliği", 1),
+                _item(
+                    "material.masonry",
+                    "Duvar malzemesi",
+                    2,
+                    supply_by=SupplyBy.CUSTOMER,
+                    default_included=False,
+                    pricing_role=PricingRole.EXCLUSION,
+                ),
+            ],
+        ),
         WorkPackage(
             id=new_id(),
             service_code="formwork.standard.turnkey",

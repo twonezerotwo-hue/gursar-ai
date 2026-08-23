@@ -14,6 +14,10 @@ class Settings:
     understanding_provider: str
     openai_api_key: str | None
     openai_model: str
+    chat_provider: str = "ollama"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "qwen3:4b"
+    ollama_timeout_seconds: float = 120.0
     quote_first: bool = True
 
     @classmethod
@@ -27,4 +31,8 @@ class Settings:
             understanding_provider=os.getenv("GURSAR_UNDERSTANDING_PROVIDER", "rule_based"),
             openai_api_key=os.getenv("OPENAI_API_KEY") or None,
             openai_model=os.getenv("OPENAI_MODEL", "gpt-5-mini"),
+            chat_provider=os.getenv("GURSAR_CHAT_PROVIDER", "ollama"),
+            ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
+            ollama_model=os.getenv("OLLAMA_MODEL", "qwen3:4b"),
+            ollama_timeout_seconds=float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120")),
         )

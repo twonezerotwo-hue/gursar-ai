@@ -28,11 +28,11 @@ def test_formwork_quote_first_then_deterministic_total(
     first = send(client, conversation_id, "kalıbı kaça yapıyorsun")
     first_quote = first["quotes"][0]
 
-    assert first_quote["service_code"] == "formwork.standard.turnkey"
-    assert Decimal(first_quote["unit_price"]) == Decimal("1350")
+    assert first_quote["service_code"] == "formwork.labor"
+    assert Decimal(first_quote["unit_price"]) == Decimal("700")
     assert first_quote["total_price"] is None
     assert first_quote["price_version"] == 1
-    assert "1.350 TL/m² + KDV" in first["assistant_text"]
+    assert "700 TL/m² + KDV" in first["assistant_text"]
     assert "Kaç m²" in first["assistant_text"]
 
     second = send(client, conversation_id, "4 bin m2")
@@ -40,12 +40,12 @@ def test_formwork_quote_first_then_deterministic_total(
 
     assert second_quote["job_id"] == first_quote["job_id"]
     assert Decimal(second_quote["quantity"]) == Decimal("4000")
-    assert Decimal(second_quote["total_price"]) == Decimal("5400000")
-    assert "4.000 m² × 1.350 TL/m² = 5.400.000 TL + KDV" in second["assistant_text"]
+    assert Decimal(second_quote["total_price"]) == Decimal("2800000")
+    assert "4.000 m² × 700 TL/m² = 2.800.000 TL + KDV" in second["assistant_text"]
 
     restored = client.get(f"/api/v1/conversations/{conversation_id}/quotes")
     assert restored.status_code == 200
-    assert Decimal(restored.json()[0]["total_price"]) == Decimal("5400000")
+    assert Decimal(restored.json()[0]["total_price"]) == Decimal("2800000")
 
 
 def test_two_jobs_are_kept_separate(client: TestClient, conversation_id: str) -> None:
@@ -100,8 +100,138 @@ def test_location_falls_back_from_gokturk_to_istanbul_price(
     quote = result["quotes"][0]
 
     assert quote["location_code"] == "TR/ISTANBUL/EYUPSULTAN/GOKTURK"
-    assert Decimal(quote["unit_price"]) == Decimal("1350")
-    assert Decimal(quote["total_price"]) == Decimal("135000")
+    assert Decimal(quote["unit_price"]) == Decimal("700")
+    assert Decimal(quote["total_price"]) == Decimal("70000")
+
+
+def test_user_provided_labor_prices_and_formwork_material_supplement(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    reinforcement = send(client, conversation_id, "100 m2 demir işçiliği")["quotes"][0]
+    formwork = send(client, conversation_id, "100 m2 kalıp işçiliği")["quotes"][0]
+    masonry = send(client, conversation_id, "100 m2 duvar işçiliği")["quotes"][0]
+    formwork_with_material = send(
+        client,
+        conversation_id,
+        "100 m2 kalıp malzemesi dahil",
+    )["quotes"][0]
+
+    assert Decimal(reinforcement["unit_price"]) == Decimal("500")
+    assert Decimal(reinforcement["total_price"]) == Decimal("50000")
+    assert Decimal(formwork["unit_price"]) == Decimal("700")
+    assert Decimal(formwork["total_price"]) == Decimal("70000")
+    assert Decimal(masonry["unit_price"]) == Decimal("200")
+    assert Decimal(masonry["total_price"]) == Decimal("20000")
+    assert Decimal(formwork_with_material["unit_price"]) == Decimal("925")
+    assert Decimal(formwork_with_material["total_price"]) == Decimal("92500")
+
+
+def test_labor_price_question_returns_unit_price_without_assuming_quantity(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    reinforcement = send(client, conversation_id, "Demir işçiliğinin m² fiyatı nedir?")[
+        "quotes"
+    ][0]
+    formwork = send(client, conversation_id, "Kalıp işçiliğinin m² fiyatı nedir?")["quotes"][0]
+    masonry = send(client, conversation_id, "Duvar işçiliğinin m² fiyatı nedir?")["quotes"][0]
+
+    assert Decimal(reinforcement["unit_price"]) == Decimal("500")
+    assert reinforcement["quantity"] is None
+    assert reinforcement["total_price"] is None
+    assert Decimal(formwork["unit_price"]) == Decimal("700")
+    assert formwork["quantity"] is None
+    assert formwork["total_price"] is None
+    assert Decimal(masonry["unit_price"]) == Decimal("200")
+    assert masonry["quantity"] is None
+    assert masonry["total_price"] is None
+
+
+def test_quantity_follow_up_stays_on_latest_job_but_named_trade_switches_context(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    reinforcement = send(client, conversation_id, "demir işçiliği m2 fiyatı")["quotes"][0]
+    formwork = send(client, conversation_id, "kalıp işçiliği m2 fiyatı")["quotes"][0]
+
+    formwork_total = send(client, conversation_id, "5000")["quotes"][0]
+    reinforcement_total = send(client, conversation_id, "demi 4555 m2")["quotes"][0]
+
+    assert formwork_total["job_id"] == formwork["job_id"]
+    assert formwork_total["service_code"] == "formwork.labor"
+    assert Decimal(formwork_total["total_price"]) == Decimal("3500000")
+    assert reinforcement_total["job_id"] == reinforcement["job_id"]
+    assert reinforcement_total["service_code"] == "reinforcement.labor"
+    assert Decimal(reinforcement_total["unit_price"]) == Decimal("500")
+    assert Decimal(reinforcement_total["total_price"]) == Decimal("2277500")
+
+    restored = client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()
+    assert len(restored) == 2
+    assert {quote["service_code"] for quote in restored} == {
+        "reinforcement.labor",
+        "formwork.labor",
+    }
+
+
+def test_unknown_named_quantity_does_not_overwrite_previous_trade(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    formwork = send(client, conversation_id, "5000 m2 kalıp işçiliği")["quotes"][0]
+    result = send(client, conversation_id, "bilinmeyen iş 4555 m2")
+
+    assert result["quotes"][0]["status"] == "SERVICE_CLARIFICATION_REQUIRED"
+    restored = client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()
+    assert len(restored) == 1
+    assert restored[0]["job_id"] == formwork["job_id"]
+    assert Decimal(restored[0]["total_price"]) == Decimal("3500000")
+
+
+def test_repeated_trade_revises_existing_item_and_total_question_summarizes(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    reinforcement = send(client, conversation_id, "demir işçiliğinin m2 fiyatı")["quotes"][0]
+    send(client, conversation_id, "2000")
+    send(client, conversation_id, "kalıp işçiliğinin m2 fiyatı")
+    send(client, conversation_id, "2000")
+    send(client, conversation_id, "duvar")
+    send(client, conversation_id, "4000")
+
+    revision = send(client, conversation_id, "demir kaçtı")
+    assert revision["quotes"][0]["job_id"] == reinforcement["job_id"]
+    assert Decimal(revision["quotes"][0]["total_price"]) == Decimal("1000000")
+
+    restored = client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()
+    assert len(restored) == 3
+    assert {quote["service_code"] for quote in restored} == {
+        "reinforcement.labor",
+        "formwork.labor",
+        "masonry.labor",
+    }
+
+    summary = send(client, conversation_id, "toplam ne etti maliyet")
+    assert summary["quotes"] == []
+    assert "Demir İşçiliği" in summary["assistant_text"]
+    assert "Kalıp İşçiliği" in summary["assistant_text"]
+    assert "Duvar İşçiliği" in summary["assistant_text"]
+    assert "Genel toplam: 3.200.000 TL + KDV" in summary["assistant_text"]
+    assert len(client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()) == 3
+
+
+def test_formwork_material_can_be_added_in_a_follow_up(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    first = send(client, conversation_id, "100 m2 kalıp işçiliği")["quotes"][0]
+    second = send(client, conversation_id, "malzeme dahil")["quotes"][0]
+
+    assert second["job_id"] == first["job_id"]
+    assert second["service_code"] == "formwork.labor_material"
+    assert Decimal(second["quantity"]) == Decimal("100")
+    assert Decimal(second["unit_price"]) == Decimal("925")
+    assert Decimal(second["total_price"]) == Decimal("92500")
 
 
 def test_missing_price_never_invents_number(
@@ -128,28 +258,127 @@ def test_missing_price_never_invents_number(
         assert event is not None
 
 
-def test_standard_rough_construction_package_applies_defaults(
+def test_rough_construction_requires_material_scope_before_pricing(
     client: TestClient,
     conversation_id: str,
 ) -> None:
     result = send(client, conversation_id, "kaba inşaat")
-    scope = {item["item_code"]: item["state"] for item in result["quotes"][0]["scope_items"]}
 
-    assert scope["formwork"] == "INCLUDED_BY_DEFAULT"
-    assert scope["reinforcement"] == "INCLUDED_BY_DEFAULT"
-    assert scope["masonry"] == "INCLUDED_BY_DEFAULT"
-    assert "Duvar dahil mi" not in result["assistant_text"]
+    assert result["quotes"][0]["status"] == "SERVICE_CLARIFICATION_REQUIRED"
+    assert result["quotes"][0]["service_code"] == "rough_construction.turnkey"
+    assert "malzemeli mi, malzemesiz mi" in result["assistant_text"]
+    assert "Toplam metraj kaç m²" in result["assistant_text"]
 
 
-def test_customer_exclusion_overrides_standard_package(
+def test_labor_only_rough_construction_is_split_and_totalled(
     client: TestClient,
     conversation_id: str,
 ) -> None:
-    result = send(client, conversation_id, "kaba inşaat ama duvar hariç")
-    scope = {item["item_code"]: item["state"] for item in result["quotes"][0]["scope_items"]}
+    first = send(client, conversation_id, "100 m2 kaba inşaat")
+    result = send(client, conversation_id, "malzemesiz")
 
-    assert scope["masonry"] == "EXCLUDED_BY_CUSTOMER"
-    assert scope["formwork"] == "INCLUDED_BY_DEFAULT"
+    assert first["quotes"][0]["status"] == "SERVICE_CLARIFICATION_REQUIRED"
+    assert {quote["service_code"] for quote in result["quotes"]} == {
+        "reinforcement.labor",
+        "formwork.labor",
+        "masonry.labor",
+    }
+    assert sum(Decimal(quote["total_price"]) for quote in result["quotes"]) == Decimal(
+        "140000"
+    )
+    assert "140.000 TL + KDV" in result["assistant_text"]
+    assert "yalnız işçilik" in result["assistant_text"]
+
+
+def test_material_rough_construction_uses_only_configured_material_price(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    send(client, conversation_id, "kaba inşaat")
+    result = send(client, conversation_id, "100 m2 malzemeli")
+
+    assert {quote["service_code"] for quote in result["quotes"]} == {
+        "reinforcement.labor",
+        "formwork.labor_material",
+        "masonry.labor",
+    }
+    assert sum(Decimal(quote["total_price"]) for quote in result["quotes"]) == Decimal(
+        "162500"
+    )
+    assert "162.500 TL + KDV" in result["assistant_text"]
+    assert "Kalıp malzemesi dahildir" in result["assistant_text"]
+    assert "Demir ve duvar malzemeleri" in result["assistant_text"]
+
+
+def test_rough_template_keeps_scope_until_later_quantity_and_updates_same_items(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    first = send(client, conversation_id, "Kaba İnşaat")
+    scope = send(client, conversation_id, "malzemeli")
+    result = send(client, conversation_id, "100")
+
+    assert "malzemeli mi, malzemesiz mi" in first["assistant_text"]
+    assert "Toplam metraj kaç m²" in scope["assistant_text"]
+    assert "162.500 TL + KDV" in result["assistant_text"]
+    assert {quote["service_code"] for quote in result["quotes"]} == {
+        "reinforcement.labor",
+        "formwork.labor_material",
+        "masonry.labor",
+    }
+    restored = client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()
+    assert len(restored) == 3
+    assert sum(Decimal(quote["total_price"]) for quote in restored) == Decimal("162500")
+
+
+def test_fine_construction_template_waits_for_prices_without_creating_quote(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    result = send(client, conversation_id, "İnce İnşaat")
+
+    assert result["quotes"] == []
+    assert "fiyatları henüz tanımlanmadığı" in result["assistant_text"]
+    assert client.get(f"/api/v1/conversations/{conversation_id}/quotes").json() == []
+
+
+def test_completed_rough_scope_does_not_capture_next_labor_item(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    send(client, conversation_id, "100 m2 kaba inşaat")
+    rough_quotes = send(client, conversation_id, "malzemesiz")["quotes"]
+    rough_formwork = next(
+        quote for quote in rough_quotes if quote["service_code"] == "formwork.labor"
+    )
+    next_item = send(client, conversation_id, "50 m2 kalıp işçiliği")
+
+    assert len(next_item["quotes"]) == 1
+    assert next_item["quotes"][0]["service_code"] == "formwork.labor"
+    assert next_item["quotes"][0]["job_id"] == rough_formwork["job_id"]
+
+    restored = client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()
+    assert len(restored) == 3
+    assert sum(Decimal(quote["total_price"]) for quote in restored) == Decimal("105000")
+
+
+def test_quote_history_accumulates_separate_labor_items(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    send(client, conversation_id, "100 m2 demir işçiliği")
+    send(client, conversation_id, "200 m2 kalıp işçiliği")
+    send(client, conversation_id, "300 m2 duvar işçiliği")
+
+    restored = client.get(f"/api/v1/conversations/{conversation_id}/quotes")
+    assert restored.status_code == 200
+    quotes = restored.json()
+    assert {quote["service_code"] for quote in quotes} == {
+        "reinforcement.labor",
+        "formwork.labor",
+        "masonry.labor",
+    }
+    assert sum(Decimal(quote["total_price"]) for quote in quotes) == Decimal("250000")
 
 
 def test_analysis_snapshots_are_appended_not_overwritten(

@@ -29,9 +29,14 @@ flowchart TB
     API --> QR["QR module"]
     API --> PricingAdmin["Pricing admin API"]
     Conversation --> Understanding["Customer Understanding port"]
+    Conversation --> ConstructionChat["Construction-only chat port"]
     Understanding --> RuleBased["Rule-based adapter"]
     Understanding --> Fake["Fake adapter"]
     Understanding --> OpenAI["OpenAI adapter"]
+    ConstructionChat --> Ollama["Local Ollama / Qwen3 adapter"]
+    Conversation --> LegalSearch["Legal Knowledge search"]
+    LegalSearch --> OfficialCorpus["Versioned official corpus"]
+    LegalSearch --> ConstructionChat
     Conversation --> Quote["Quick Quote application service"]
     Quote --> Catalog["Service Catalog repository"]
     Quote --> WorkPackage["Work Package repository"]
@@ -43,6 +48,16 @@ flowchart TB
 The domain layer imports neither FastAPI, SQLAlchemy, nor any AI SDK. ORM rows and Pydantic API
 schemas are separate from domain dataclasses.
 
+The local construction-chat adapter receives recent conversation messages and authoritative
+quick-quote facts. It may explain construction topics and phrase the response naturally, but it
+cannot replace price-book arithmetic. Structured scope classification turns out-of-domain requests
+into a fixed construction-only refusal.
+
+For legal or specification questions, `QuickQuoteService` retrieves the highest-scoring passages
+from the legal corpus and labels them `K1`, `K2`, and `K3`. Ollama receives those passages as a
+closed reference context: it may cite them but may not invent a law, article, TSE clause, or permit
+decision. The customer response includes a de-duplicated official-source appendix.
+
 ## Data Ownership
 
 | Module | Owned records |
@@ -52,6 +67,7 @@ schemas are separate from domain dataclasses.
 | Service catalog | `service_catalog` |
 | Work package | `work_packages`, `work_package_items` |
 | Pricing | `price_book` |
+| Legal knowledge | `legal_documents`, `legal_chunks` |
 | Quick quote | `quick_quotes` |
 | QR | `qr_sources` |
 | Core infrastructure | `audit_events`, `outbox_events` |

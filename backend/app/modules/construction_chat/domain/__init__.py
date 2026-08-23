@@ -1,0 +1,1 @@
+"""Construction chat domain contracts."""

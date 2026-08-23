@@ -3,22 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta
-      name="description"
-      content="GÜRSAR AI ile yapım işinizi anlatın, güncel iç fiyat defterinden hızlı teklif alın."
-    />
-    <meta name="theme-color" content="#173c36" />
-    <title>GÜRSAR AI</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <meta name="description" content="GÜRSAR AI — mimarlık, inşaat, fiyatlandırma ve teknik mevzuat asistanı." />
+    <meta name="theme-color" content="#050505" />
+    <title>GÜRSAR AI · Mimarlık ve İnşaat</title>
+    <link rel="stylesheet" href="/static/styles.css?v=20260823-8" />
   </head>
   <body>
+    <div class="intro" aria-hidden="true">
+      <div class="intro-stage">
+        <div class="intro-mark">
+          <img src="/static/assets/gursar-mimarlik-logo.jpeg" alt="" />
+          <span>GÜRSAR MİMARLIK</span>
+        </div>
+        <p class="intro-slogan">
+          <span>Siz Düşünün.</span>
+          <span>Taşının.</span>
+          <span>Biz İnşa Ediyoruz.</span>
+        </p>
+      </div>
+    </div>
+
     <div class="app-shell">
       <header class="topbar">
         <a class="brand" href="/" aria-label="GÜRSAR AI ana sayfa">
-          <span class="brand-mark" aria-hidden="true">G</span>
-          <span>
-            <strong>GÜRSAR AI</strong>
-            <small>Yapının her aşamasında tek temas</small>
+          <span class="brand-logo-wrap" aria-hidden="true">
+            <img class="brand-logo" src="/static/assets/gursar-mimarlik-logo.jpeg" alt="" />
+          </span>
+          <span class="brand-copy">
+            <strong>GÜRSAR</strong>
+            <small>AI · Mimarlık ve İnşaat</small>
           </span>
         </a>
         <div class="connection" id="connection-status" aria-live="polite">
@@ -27,55 +40,63 @@
         </div>
       </header>
 
+      <nav class="quick-services" aria-label="Hazır şablonlar">
+        <span class="quick-label">Hazır şablonlar</span>
+        <button type="button" data-prompt="Kaba İnşaat">Kaba İnşaat</button>
+        <button type="button" data-prompt="İnce İnşaat">İnce İnşaat</button>
+      </nav>
+
       <main class="workspace">
         <section class="conversation-pane" aria-label="GÜRSAR AI görüşmesi">
-          <div class="welcome-band">
-            <p class="eyebrow">Mimarlık · İnşaat · Şantiye Yönetimi</p>
-            <h1>Ne inşa etmek istiyorsunuz?</h1>
-            <p>İşinizi doğal şekilde anlatın. Güncel birim fiyatı ve metraj varsa yaklaşık toplamı hemen paylaşalım.</p>
-            <button class="primary-action" id="talk-button" type="button">AI ile konuş</button>
-          </div>
-
-          <div class="quick-services" aria-label="Hızlı hizmet seçenekleri">
-            <button type="button" data-prompt="Kalıp işi için fiyat almak istiyorum">Kalıp</button>
-            <button type="button" data-prompt="Kaba inşaat fiyatı almak istiyorum">Kaba inşaat</button>
-            <button type="button" data-prompt="Kompozit dış cephe fiyatı almak istiyorum">Kompozit cephe</button>
-            <button type="button" data-prompt="Mantolama ve cephe boyası fiyatı almak istiyorum">Mantolama</button>
+          <div class="conversation-header">
+            <div>
+              <strong>Proje görüşmesi</strong>
+              <span>İnşaat sorunuzu veya metrajı yazın</span>
+            </div>
+            <button class="focus-chat" id="talk-button" type="button">Yeni mesaj</button>
           </div>
 
           <div class="message-list" id="message-list" aria-live="polite" aria-label="Mesajlar">
-            <div class="loading-message">Görüşme hazırlanıyor…</div>
+            <div class="loading-message"><span></span> Görüşme hazırlanıyor…</div>
           </div>
 
           <form class="composer" id="message-form">
-            <label class="sr-only" for="message-input">Yapım işinizi anlatın</label>
-            <textarea
-              id="message-input"
-              name="message"
-              rows="1"
-              maxlength="4000"
-              placeholder="Örn. Göktürk'te 2.000 m² kompozit cephe işim var"
-              autocomplete="off"
-              required
-            ></textarea>
-            <button type="submit" id="send-button">Gönder</button>
+            <label class="sr-only" for="message-input">Projenizi anlatın</label>
+            <textarea id="message-input" name="message" rows="1" maxlength="4000" placeholder="Mesajınızı yazın…" autocomplete="off" required></textarea>
+            <button type="submit" id="send-button" aria-label="Mesajı gönder">
+              <span>Gönder</span><b aria-hidden="true">↗</b>
+            </button>
           </form>
         </section>
 
-        <aside class="quote-pane" aria-label="Teklif özeti">
+        <aside class="quote-pane" aria-label="Metraj ve hakediş özeti">
           <div class="quote-heading">
-            <p class="eyebrow">Canlı özet</p>
-            <h2>İşler ve fiyatlar</h2>
+            <h2>Metraj &amp; Hakediş</h2>
+            <span>Görüşmeden otomatik hesaplanır</span>
           </div>
-          <div class="quote-list" id="quote-list">
-            <div class="empty-quote">
-              <span class="empty-index">01</span>
-              <p>İş türü, konum ve metraj konuşma sırasında burada netleşir.</p>
+          <div class="summary-grid" aria-label="Toplamlar">
+            <div>
+              <span>Toplam metraj</span>
+              <strong id="summary-quantity">—</strong>
+            </div>
+            <div>
+              <span>Toplam hakediş</span>
+              <strong id="summary-total">—</strong>
+              <small>KDV hariç</small>
             </div>
           </div>
-          <div class="trust-note">
-            <strong>GÜRSAR iç fiyat defteri</strong>
-            <span>Tekliflerde yalnızca geçerli şirket fiyatları kullanılır.</span>
+          <div class="quote-list" id="quote-list">
+            <div class="empty-quote"><p>Metraj ve iş kalemi yazdığınızda hesap burada görünür.</p></div>
+          </div>
+          <div class="ledger-footer">
+            <span class="ledger-footer-title">Kalem özeti</span>
+            <div class="ledger-breakdown" id="ledger-breakdown">
+              <p>Henüz hesaplanmış kalem yok.</p>
+            </div>
+            <div class="ledger-grand-total">
+              <span>Genel toplam</span>
+              <strong id="ledger-grand-total">—</strong>
+            </div>
           </div>
         </aside>
       </main>
@@ -87,7 +108,6 @@
         <div class="message-body"></div>
       </article>
     </template>
-
-    <script src="/static/app.js" defer></script>
+    <script src="/static/app.js?v=20260823-10" defer></script>
   </body>
 </html>
