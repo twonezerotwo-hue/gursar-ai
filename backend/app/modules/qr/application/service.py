@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.core.persistence import append_audit, append_outbox
+from app.core.security import ConversationTokenSigner
 from app.modules.conversation.domain.models import Message, MessageRole
 from app.modules.conversation.infrastructure.repository import ConversationRepository
 from app.modules.qr.infrastructure.repository import QRSourceRepository
@@ -21,6 +23,8 @@ class QRConversationStart:
     source_name: str
     resumed: bool
     messages: list[Message]
+    conversation_owner_token: str
+    session_expires_at: datetime
 
 
 class QRConversationService:
@@ -31,47 +35,55 @@ class QRConversationService:
         qr_sources: QRSourceRepository,
         conversations: ConversationRepository,
         locale: str,
+        token_signer: ConversationTokenSigner,
+        session_ttl_seconds: int,
     ) -> None:
         self._session = session
         self._qr_sources = qr_sources
         self._conversations = conversations
         self._locale = locale
+        self._token_signer = token_signer
+        self._session_ttl_seconds = session_ttl_seconds
 
     def start_or_resume(self, code: str) -> QRConversationStart:
         source = self._qr_sources.get_active_by_code(code)
         if source is None:
             raise QRSourceNotFoundError(code)
 
-        conversation = self._conversations.find_latest_by_qr_source(source.id)
-        resumed = conversation is not None
-        if conversation is None:
-            conversation = self._conversations.create(
-                locale=self._locale,
-                qr_source_id=source.id,
-            )
-            self._conversations.add_message(
-                conversation_id=conversation.id,
-                role=MessageRole.ASSISTANT,
-                content="Merhaba, nasıl bir iş planlıyorsunuz?",
-            )
-            append_outbox(
-                self._session,
-                event_type="conversation.started.v1",
-                aggregate_id=conversation.id,
-                payload={"qr_source_code": source.code, "qr_source_id": source.id},
-            )
-            append_audit(
-                self._session,
-                action="QR_CONVERSATION_STARTED",
-                aggregate_id=conversation.id,
-                detail={"qr_source_code": source.code},
-                actor_type="ANONYMOUS_CUSTOMER",
-            )
+        conversation = self._conversations.create(
+            locale=self._locale,
+            qr_source_id=source.id,
+        )
+        owner = self._conversations.create_owner_session(
+            conversation_id=conversation.id,
+            signer=self._token_signer,
+            ttl_seconds=self._session_ttl_seconds,
+        )
+        self._conversations.add_message(
+            conversation_id=conversation.id,
+            role=MessageRole.ASSISTANT,
+            content="Merhaba, nasıl bir iş planlıyorsunuz?",
+        )
+        append_outbox(
+            self._session,
+            event_type="conversation.started.v1",
+            aggregate_id=conversation.id,
+            payload={"qr_source_code": source.code, "qr_source_id": source.id},
+        )
+        append_audit(
+            self._session,
+            action="QR_CONVERSATION_STARTED",
+            aggregate_id=conversation.id,
+            detail={"qr_source_code": source.code},
+            actor_type="ANONYMOUS_CUSTOMER",
+        )
 
         return QRConversationStart(
             conversation_id=conversation.id,
             source_code=source.code,
             source_name=source.display_name,
-            resumed=resumed,
+            resumed=False,
             messages=self._conversations.list_messages(conversation.id),
+            conversation_owner_token=owner.raw_token,
+            session_expires_at=owner.expires_at,
         )

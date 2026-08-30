@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -12,7 +13,7 @@ from app.main import create_app
 
 
 @pytest.fixture
-def app() -> Generator[FastAPI]:
+def app(tmp_path: Path) -> Generator[FastAPI]:
     engine = create_database_engine("sqlite+pysqlite:///:memory:")
     settings = Settings(
         environment="test",
@@ -24,6 +25,7 @@ def app() -> Generator[FastAPI]:
         openai_api_key=None,
         openai_model="gpt-5-mini",
         chat_provider="deterministic",
+        document_storage_root=tmp_path / "documents",
     )
     application = create_app(settings=settings, engine=engine)
     yield application

@@ -16,6 +16,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    if inspector.has_table("legal_documents") and inspector.has_table("legal_chunks"):
+        return
     op.create_table(
         "legal_documents",
         sa.Column("id", sa.String(length=36), nullable=False),

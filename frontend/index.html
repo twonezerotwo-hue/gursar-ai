@@ -3,17 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="GÜRSAR AI — mimarlık, inşaat, fiyatlandırma ve teknik mevzuat asistanı." />
-    <meta name="theme-color" content="#050505" />
+    <meta name="description" content="GÜRSAR AI — mimarlık, inşaat, metraj ve hakediş asistanı." />
+    <meta name="theme-color" content="#080907" />
     <title>GÜRSAR AI · Mimarlık ve İnşaat</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260823-8" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260824-5" />
   </head>
   <body>
     <div class="intro" aria-hidden="true">
       <div class="intro-stage">
         <div class="intro-mark">
           <img src="/static/assets/gursar-mimarlik-logo.jpeg" alt="" />
-          <span>GÜRSAR MİMARLIK</span>
         </div>
         <p class="intro-slogan">
           <span>Siz Düşünün.</span>
@@ -23,7 +22,7 @@
       </div>
     </div>
 
-    <div class="app-shell">
+    <div class="app-shell" id="app-shell">
       <header class="topbar">
         <a class="brand" href="/" aria-label="GÜRSAR AI ana sayfa">
           <span class="brand-logo-wrap" aria-hidden="true">
@@ -31,75 +30,333 @@
           </span>
           <span class="brand-copy">
             <strong>GÜRSAR</strong>
-            <small>AI · Mimarlık ve İnşaat</small>
+            <small>AI · MİMARLIK VE İNŞAAT</small>
           </span>
         </a>
-        <div class="connection" id="connection-status" aria-live="polite">
-          <span class="connection-dot" aria-hidden="true"></span>
-          <span>Bağlanıyor</span>
+        <div class="topbar-actions">
+          <button
+            class="portfolio-launch"
+            id="portfolio-launch"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="portfolio-modal"
+            aria-expanded="false"
+          >
+            <span class="portfolio-launch-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 19V7l8-4 8 4v12M8 19v-7h8v7M3 19h18" /></svg>
+            </span>
+            <span class="portfolio-launch-copy">
+              <small>GÜRSAR PORTFÖY</small>
+              <strong>Tamamlanan Projeler</strong>
+            </span>
+            <span class="portfolio-launch-count" aria-label="8 proje">08</span>
+          </button>
+          <div class="connection" id="connection-status" aria-live="polite">
+            <span class="connection-dot" aria-hidden="true"></span>
+            <span>Bağlanıyor</span>
+          </div>
         </div>
       </header>
 
-      <nav class="quick-services" aria-label="Hazır şablonlar">
-        <span class="quick-label">Hazır şablonlar</span>
-        <button type="button" data-prompt="Kaba İnşaat">Kaba İnşaat</button>
-        <button type="button" data-prompt="İnce İnşaat">İnce İnşaat</button>
-      </nav>
-
       <main class="workspace">
-        <section class="conversation-pane" aria-label="GÜRSAR AI görüşmesi">
-          <div class="conversation-header">
-            <div>
-              <strong>Proje görüşmesi</strong>
-              <span>İnşaat sorunuzu veya metrajı yazın</span>
+        <div class="main-column">
+          <section class="services-section" aria-labelledby="services-title">
+            <div class="section-heading">
+              <span class="eyebrow" id="services-title">HİZMETLER</span>
+              <p>Projeniz için uzmanlık alanını seçin</p>
             </div>
-            <button class="focus-chat" id="talk-button" type="button">Yeni mesaj</button>
-          </div>
 
-          <div class="message-list" id="message-list" aria-live="polite" aria-label="Mesajlar">
-            <div class="loading-message"><span></span> Görüşme hazırlanıyor…</div>
-          </div>
+            <div class="service-grid">
+              <button class="service-card" type="button" data-prompt="Mimari çizim ve ruhsat projesi hakkında bilgi almak istiyorum.">
+                <span class="service-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4 20h16M6 17V7l6-3 6 3v10M9 17v-6h6v6" /></svg>
+                </span>
+                <span class="service-copy">
+                  <strong>Mimari Çizim</strong>
+                  <small>Proje çizimi, planlama ve ruhsat projeleri</small>
+                </span>
+                <span class="card-arrow" aria-hidden="true">↗</span>
+              </button>
 
-          <form class="composer" id="message-form">
-            <label class="sr-only" for="message-input">Projenizi anlatın</label>
-            <textarea id="message-input" name="message" rows="1" maxlength="4000" placeholder="Mesajınızı yazın…" autocomplete="off" required></textarea>
-            <button type="submit" id="send-button" aria-label="Mesajı gönder">
-              <span>Gönder</span><b aria-hidden="true">↗</b>
-            </button>
-          </form>
-        </section>
+              <button class="service-card" type="button" data-prompt="Statik hesaplama ve betonarme proje hakkında bilgi almak istiyorum.">
+                <span class="service-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M5 20V4m14 16V4M3 7h18M3 17h18M8 7v10m8-10v10" /></svg>
+                </span>
+                <span class="service-copy">
+                  <strong>Statik Hesaplama</strong>
+                  <small>Taşıyıcı sistem analizi, betonarme hesap ve raporlar</small>
+                </span>
+                <span class="card-arrow" aria-hidden="true">↗</span>
+              </button>
 
-        <aside class="quote-pane" aria-label="Metraj ve hakediş özeti">
+              <button class="service-card" type="button" data-prompt="Kaba İnşaat">
+                <span class="service-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4 20h16M6 20V9h12v11M4 9l8-5 8 5M9 13h6M9 16h6" /></svg>
+                </span>
+                <span class="service-copy">
+                  <strong>Kaba Yapı</strong>
+                  <small>Betonarme, kalıp, demir ve duvar imalatları</small>
+                </span>
+                <span class="card-arrow" aria-hidden="true">↗</span>
+              </button>
+
+              <button class="service-card" type="button" data-prompt="İnce İnşaat">
+                <span class="service-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4 20h16M6 20V5h12v15M9 9h2m2 0h2m-6 4h2m2 0h2m-6 4h6" /></svg>
+                </span>
+                <span class="service-copy">
+                  <strong>İnce Yapı</strong>
+                  <small>İnce imalat, keşif, raporlama ve iş programı</small>
+                </span>
+                <span class="card-arrow" aria-hidden="true">↗</span>
+              </button>
+
+              <button class="service-card" type="button" data-prompt="İnşaat projem için danışmanlık almak istiyorum.">
+                <span class="service-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 10h8M8 14h5" /></svg>
+                </span>
+                <span class="service-copy">
+                  <strong>Danışmanlık</strong>
+                  <small>Maliyet, uygulama ve proje değerlendirme desteği</small>
+                </span>
+                <span class="card-arrow" aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="production-section">
+            <section class="assistant-card" id="assistant-card" aria-label="GÜRSAR AI proje görüşmesi">
+              <div class="hero-copy">
+                <span class="hero-symbol" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M6.5 6.5l11 11m0-11-11 11" /></svg>
+                </span>
+                <h1>Projenizi birlikte hesaplayalım.</h1>
+                <p>Metraj, maliyet, hakediş ve proje ihtiyaçlarınızı GÜRSAR AI ile değerlendirin.</p>
+              </div>
+
+              <div class="message-list" id="message-list" aria-live="polite" aria-label="Mesajlar">
+                <div class="loading-message"><span></span> Görüşme hazırlanıyor…</div>
+              </div>
+
+              <form class="composer" id="message-form">
+                <label class="sr-only" for="message-input">Ne yapmak istiyorsunuz?</label>
+                <div class="composer-field">
+                  <textarea id="message-input" name="message" rows="1" maxlength="4000" placeholder="Ne yapmak istiyorsunuz?" autocomplete="off" required></textarea>
+                  <small>Örn. 4.000 m² betonarme yapı için kalıp, beton ve demir metrajı çıkar.</small>
+                </div>
+                <button type="submit" id="send-button" aria-label="Mesajı gönder">
+                  <span>Gönder</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 14-7-5 14-2.5-5.5L5 12Zm6.5 1.5L19 5" /></svg>
+                </button>
+              </form>
+
+              <div class="file-upload" id="file-upload">
+                <input id="project-file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.dxf,.ifc" multiple hidden />
+                <button class="file-trigger" id="file-trigger" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17V5m0 0-4 4m4-4 4 4M5 14v5h14v-5" /></svg>
+                  <span>Proje Dosyası Ekle</span>
+                </button>
+                <span class="file-support" id="file-support">PDF, PNG, JPG, DXF, IFC · En fazla 50 MB</span>
+                <div class="uploaded-files" id="uploaded-files" aria-live="polite"></div>
+              </div>
+
+              <div class="quick-actions" aria-label="Hızlı işlemler">
+                <button type="button" data-prompt="Projem için metraj çıkarmak istiyorum.">Metraj Çıkar</button>
+                <button type="button" data-prompt="Birim fiyat öğrenmek istiyorum.">Birim Fiyat Sor</button>
+                <button type="button" data-prompt="Hakediş hesaplamak istiyorum.">Hakediş Hesapla</button>
+                <button type="button" data-prompt="Projem için teklif oluşturmak istiyorum.">Teklif Oluştur</button>
+              </div>
+
+              <div class="trust-row">
+                <div>
+                  <span class="trust-icon" aria-hidden="true">✓</span>
+                  <p><strong>Doğru veri, güvenilir sonuç</strong><small>Güncel fiyat ve teknik verilerle çalışır.</small></p>
+                </div>
+                <div>
+                  <span class="trust-icon" aria-hidden="true">⌁</span>
+                  <p><strong>Hızlı metraj &amp; analiz</strong><small>Yapay zekâ destekli hesaplama motoru.</small></p>
+                </div>
+                <div>
+                  <span class="trust-icon" aria-hidden="true">◎</span>
+                  <p><strong>Şeffaf &amp; izlenebilir</strong><small>Tüm hesaplamalar kaydedilir.</small></p>
+                </div>
+              </div>
+            </section>
+          </section>
+        </div>
+
+        <aside class="quote-pane" aria-label="Proje özeti">
           <div class="quote-heading">
-            <h2>Metraj &amp; Hakediş</h2>
-            <span>Görüşmeden otomatik hesaplanır</span>
+            <div>
+              <span class="eyebrow">CANLI HESAP</span>
+              <h2>Proje Özeti</h2>
+            </div>
+            <button class="reset-button" id="reset-button" type="button">Sıfırla</button>
           </div>
+
           <div class="summary-grid" aria-label="Toplamlar">
             <div>
-              <span>Toplam metraj</span>
+              <span>Toplam Metraj</span>
               <strong id="summary-quantity">—</strong>
             </div>
             <div>
-              <span>Toplam hakediş</span>
+              <span>Tahmini Hakediş</span>
               <strong id="summary-total">—</strong>
               <small>KDV hariç</small>
             </div>
           </div>
-          <div class="quote-list" id="quote-list">
-            <div class="empty-quote"><p>Metraj ve iş kalemi yazdığınızda hesap burada görünür.</p></div>
+
+          <div class="line-items-heading">
+            <span>Kalem Özeti</span>
+            <small>Görüşmeden otomatik hesaplanır</small>
           </div>
+          <div class="quote-list" id="quote-list">
+            <div class="empty-quote">
+              <span aria-hidden="true">＋</span>
+              <p><strong>Henüz kalem eklenmedi.</strong>Sohbet üzerinden projenizi tarif edin, kalemler otomatik olarak burada görünsün.</p>
+            </div>
+          </div>
+
           <div class="ledger-footer">
-            <span class="ledger-footer-title">Kalem özeti</span>
             <div class="ledger-breakdown" id="ledger-breakdown">
               <p>Henüz hesaplanmış kalem yok.</p>
             </div>
             <div class="ledger-grand-total">
-              <span>Genel toplam</span>
+              <span>Genel Toplam<small>KDV hariç</small></span>
               <strong id="ledger-grand-total">—</strong>
             </div>
+            <button class="report-button" id="report-button" type="button" disabled>
+              <span>Detaylı Raporu İndir</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" /></svg>
+            </button>
           </div>
         </aside>
       </main>
+    </div>
+
+    <div class="portfolio-modal" id="portfolio-modal" hidden>
+      <button class="portfolio-backdrop" type="button" data-portfolio-close aria-label="Proje portalını kapat"></button>
+      <section class="portfolio-dialog" role="dialog" aria-modal="true" aria-labelledby="portfolio-title">
+        <div class="portal-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
+        <header class="portfolio-header">
+          <div>
+            <span class="eyebrow">GÜRSAR PROJE PORTALI</span>
+            <h2 id="portfolio-title">Tamamlanan Projeler</h2>
+            <p>Eğitim, konut ve turizm yapılarından tamamlanan seçili uygulamalar.</p>
+            <div class="portfolio-stats" aria-label="Portföy özeti">
+              <span><strong>8</strong> Proje</span>
+              <span><strong>55.301 m²</strong> Toplam alan</span>
+              <span><strong>3</strong> Yapı tipi</span>
+            </div>
+          </div>
+          <button class="portfolio-close" id="portfolio-close" type="button" aria-label="Kapat">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
+        </header>
+
+        <div class="portfolio-grid">
+          <article class="portfolio-card">
+            <div class="portfolio-visual"><img src="/static/assets/projects/sehit-osman-kose.webp" alt="Şehit Osman Köse Ortaokulu" loading="lazy" /></div>
+            <div class="portfolio-card-body">
+              <div class="portfolio-card-meta"><span>01 · EĞİTİM YAPISI</span><span class="project-status">TAMAMLANDI</span></div>
+              <h3>Şehit Osman Köse Ortaokulu</h3>
+              <p><strong>13.000 m² · 32 derslik</strong><span>Mersin · Kaba + ince işçilik</span></p>
+              <button type="button" data-portfolio-prompt="Şehit Osman Köse Ortaokulu referansınıza benzer 13.000 m² bir eğitim yapısı planlamak istiyorum.">
+                Benzer proje planla <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </article>
+
+          <article class="portfolio-card">
+            <div class="portfolio-visual"><img src="/static/assets/projects/kayasehir-ilkokulu.webp" alt="Kayaşehir İlkokulu" loading="lazy" /></div>
+            <div class="portfolio-card-body">
+              <div class="portfolio-card-meta"><span>02 · EĞİTİM YAPISI</span><span class="project-status">TAMAMLANDI</span></div>
+              <h3>Kayaşehir İlkokulu</h3>
+              <p><strong>9.950 m² · 31/1 ikmal inşaat</strong><span>İnce işler uygulaması</span></p>
+              <button type="button" data-portfolio-prompt="Kayaşehir İlkokulu referansınıza benzer bir eğitim yapısı ikmal ve ince işler projesi planlamak istiyorum.">
+                Benzer proje planla <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </article>
+
+          <article class="portfolio-card">
+            <div class="portfolio-visual"><img src="/static/assets/projects/nur-plaza.webp" alt="Nur Plaza" loading="lazy" /></div>
+            <div class="portfolio-card-body">
+              <div class="portfolio-card-meta"><span>03 · KONUT YAPISI</span><span class="project-status">TAMAMLANDI</span></div>
+              <h3>Nur Plaza</h3>
+              <p><strong>2.108 m² · 16 daire + 2 dükkân</strong><span>Anahtar teslim</span></p>
+              <button type="button" data-portfolio-prompt="Nur Plaza referansınıza benzer, 16 daire ve 2 dükkândan oluşan anahtar teslim bir konut projesi planlamak istiyorum.">
+                Benzer proje planla <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </article>
+
+          <article class="portfolio-card">
+            <div class="portfolio-visual"><img src="/static/assets/projects/inonu-pasaji.webp" alt="İnönü Pasajı" loading="lazy" /></div>
+            <div class="portfolio-card-body">
+              <div class="portfolio-card-meta"><span>04 · KONUT YAPISI</span><span class="project-status">TAMAMLANDI</span></div>
+              <h3>İnönü Pasajı</h3>
+              <p><strong>3.627 m² · 26 daire + 20 dükkân</strong><span>Kaba inşaat işçiliği</span></p>
+              <button type="button" data-portfolio-prompt="İnönü Pasajı referansınıza benzer, konut ve ticari alanlardan oluşan bir kaba inşaat projesi planlamak istiyorum.">
+                Benzer proje planla <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </article>
+
+          <article class="portfolio-card">
+            <div class="portfolio-visual"><img src="/static/assets/projects/z-panorama-evleri.webp" alt="Z Panorama Evleri" loading="lazy" /></div>
+            <div class="portfolio-card-body">
+              <div class="portfolio-card-meta"><span>05 · KONUT YAPISI</span><span class="project-status">TAMAMLANDI</span></div>
+              <h3>Z Panorama Evleri</h3>
+              <p><strong>19.563 m² · 8 blok / 128 daire</strong><span>2 dükkân · Anahtar teslim</span></p>
+              <button type="button" data-portfolio-prompt="Z Panorama Evleri referansınıza benzer çok bloklu, anahtar teslim bir konut projesi planlamak istiyorum.">
+                Benzer proje planla <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </article>
+
+          <article class="portfolio-card">
+            <div class="portfolio-visual"><img src="/static/assets/projects/elite-world-comfy.webp" alt="Elite World Comfy Otel" loading="lazy" /></div>
+            <div class="portfolio-card-body">
+              <div class="portfolio-card-meta"><span>06 · TURİZM YAPISI</span><span class="project-status">TAMAMLANDI</span></div>
+              <h3>Elite World Comfy Otel</h3>
+              <p><strong>3.555 m² · 40 oda + 1 dükkân</strong><span>Anahtar teslim otel projesi</span></p>
+              <button type="button" data-portfolio-prompt="Elite World Comfy Otel referansınıza benzer anahtar teslim bir turizm yapısı planlamak istiyorum.">
+                Benzer proje planla <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </article>
+
+          <article class="portfolio-card">
+            <div class="portfolio-visual"><img src="/static/assets/projects/kayikcioglu.webp" alt="Kayıkçıoğlu Projesi" loading="lazy" /></div>
+            <div class="portfolio-card-body">
+              <div class="portfolio-card-meta"><span>07 · KONUT YAPISI</span><span class="project-status">TAMAMLANDI</span></div>
+              <h3>Kayıkçıoğlu Projesi</h3>
+              <p><strong>1.058 m² · 8 daire + 3 dükkân</strong><span>Kaba inşaat işçiliği</span></p>
+              <button type="button" data-portfolio-prompt="Kayıkçıoğlu Projesi referansınıza benzer bir kaba inşaat konut projesi planlamak istiyorum.">
+                Benzer proje planla <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </article>
+
+          <article class="portfolio-card">
+            <div class="portfolio-visual"><img src="/static/assets/projects/kahvehane.webp" alt="Kahvehane Projesi" loading="lazy" /></div>
+            <div class="portfolio-card-body">
+              <div class="portfolio-card-meta"><span>08 · KONUT YAPISI</span><span class="project-status">TAMAMLANDI</span></div>
+              <h3>Kahvehane Projesi</h3>
+              <p><strong>2.440 m² · 2 blok / 13 daire</strong><span>Dükkân · Anahtar teslim</span></p>
+              <button type="button" data-portfolio-prompt="Kahvehane Projesi referansınıza benzer, iki bloklu anahtar teslim bir konut projesi planlamak istiyorum.">
+                Benzer proje planla <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </article>
+        </div>
+
+        <footer class="portfolio-footer">
+          <span><i aria-hidden="true"></i> 8 tamamlanmış proje · 55.301 m²</span>
+          <p>Projenizi anlatın, size uygun kapsamı birlikte oluşturalım.</p>
+        </footer>
+      </section>
     </div>
 
     <template id="message-template">
@@ -108,6 +365,6 @@
         <div class="message-body"></div>
       </article>
     </template>
-    <script src="/static/app.js?v=20260823-10" defer></script>
+    <script src="/static/app.js?v=20260824-7" defer></script>
   </body>
 </html>

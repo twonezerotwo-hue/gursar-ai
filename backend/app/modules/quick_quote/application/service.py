@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.contracts.v1.customer_understanding import (
     FACADE_SERVICE_CONSTRAINT,
+    ConversationActionV1,
     CustomerUnderstandingContextV1,
     ExistingJobContextV1,
     JobUnderstandingV1,
@@ -28,6 +29,14 @@ from app.modules.conversation.domain.models import CustomerJob, MessageRole
 from app.modules.conversation.infrastructure.repository import ConversationRepository
 from app.modules.customer_understanding.application.service import CustomerUnderstandingService
 from app.modules.customer_understanding.infrastructure.location import fold_text
+from app.modules.document_intelligence.domain.ports import DocumentAnalysisRepository
+from app.modules.estimation.application.chat import (
+    is_building_estimation_intent,
+    parse_building_estimation_request,
+    render_estimation_intake,
+    render_estimation_response,
+)
+from app.modules.estimation.application.service import EstimationService
 from app.modules.legal_knowledge.domain.ports import LegalKnowledgeSearch
 from app.modules.pricing.application.service import PriceResolver
 from app.modules.pricing.domain.location import LocationNormalizer
@@ -49,8 +58,45 @@ MONEY_PATTERN = re.compile(
 )
 INTERNAL_OUTPUT_PATTERN = re.compile(
     r"PRICE_BOOK_RESULT|dahili teklif bağlam|verified_commercial_result_available|scope_summary|"
-    r"clarification_question|system prompt|JSON (?:şeması|schema)",
+    r"clarification_question|PROJECT_DOCUMENT_CONTEXT|document_context|system prompt|"
+    r"JSON (?:şeması|schema)",
     re.IGNORECASE,
+)
+LEGAL_QUERY_MARKERS = (
+    "kanun",
+    "mevzuat",
+    "yonetmelik",
+    "sartname",
+    "resmi gazete",
+    "teblig",
+    "tse",
+    "standart",
+    "tbdy",
+    "deprem",
+    "ruhsat",
+    "imar",
+    "madde",
+    "poz",
+    "rayic",
+    "ifc",
+    "bim",
+    "yfk",
+    "yangin",
+    "enerji performans",
+    "erisilebilir",
+)
+DOCUMENT_QUERY_MARKERS = (
+    "dosya",
+    "proje",
+    "pafta",
+    "cizim",
+    "çizim",
+    "ifc",
+    "dxf",
+    "yukledig",
+    "yüklediğ",
+    "katman",
+    "modelde",
 )
 
 
@@ -73,6 +119,8 @@ class QuickQuoteService:
         default_location_code: str,
         construction_chat_provider: ConstructionChatProvider | None = None,
         legal_knowledge: LegalKnowledgeSearch | None = None,
+        document_analyses: DocumentAnalysisRepository | None = None,
+        estimation: EstimationService | None = None,
     ) -> None:
         self._session = session
         self._conversations = conversations
@@ -85,6 +133,8 @@ class QuickQuoteService:
         self._default_location_code = default_location_code
         self._construction_chat_provider = construction_chat_provider
         self._legal_knowledge = legal_knowledge
+        self._document_analyses = document_analyses
+        self._estimation = estimation
 
     def handle_customer_message(
         self,
@@ -102,6 +152,55 @@ class QuickQuoteService:
             content=text,
         )
         existing_jobs = self._conversations.list_jobs(conversation_id)
+        estimation_input = parse_building_estimation_request(text)
+        history = self._conversations.list_messages(conversation_id)
+        estimation_intake_active = self._estimation_intake_active(history)
+        estimation_context = "\n".join(
+            entry.content for entry in history[-10:] if entry.role == MessageRole.USER
+        )
+        if estimation_input is None and estimation_intake_active:
+            estimation_input = parse_building_estimation_request(estimation_context)
+        if estimation_input is not None and self._estimation is not None:
+            estimation = self._estimation.estimate(
+                estimation_input,
+                conversation_id=conversation_id,
+            )
+            customer_text = render_estimation_response(estimation)
+            assistant_message = self._conversations.add_message(
+                conversation_id=conversation_id,
+                role=MessageRole.ASSISTANT,
+                content=customer_text,
+            )
+            append_outbox(
+                self._session,
+                event_type="conversation.estimation_answered.v1",
+                aggregate_id=conversation_id,
+                payload={"request_id": estimation.request_id},
+            )
+            return ChatTurnResponseV1(
+                conversation_id=conversation_id,
+                assistant_message_id=assistant_message.id,
+                assistant_text=customer_text,
+                quotes=[],
+            )
+        if is_building_estimation_intent(text) or estimation_intake_active:
+            customer_text = render_estimation_intake(estimation_context)
+            assistant_message = self._conversations.add_message(
+                conversation_id=conversation_id,
+                role=MessageRole.ASSISTANT,
+                content=customer_text,
+            )
+            return ChatTurnResponseV1(
+                conversation_id=conversation_id,
+                assistant_message_id=assistant_message.id,
+                assistant_text=customer_text,
+                quotes=[],
+            )
+        if self._is_project_reporting_or_scheduling_turn(text):
+            return self._answer_construction_question(
+                conversation_id=conversation_id,
+                locale=conversation.locale,
+            )
         if self._is_rough_construction_turn(text, existing_jobs):
             return self._handle_rough_construction(
                 conversation_id=conversation_id,
@@ -121,9 +220,13 @@ class QuickQuoteService:
                 locale=conversation.locale,
             )
 
-        chat_classification = self._classify_chat_message(
-            conversation_id=conversation_id,
-            locale=conversation.locale,
+        chat_classification = (
+            None
+            if self._is_deterministic_quote_turn(text, existing_jobs)
+            else self._classify_chat_message(
+                conversation_id=conversation_id,
+                locale=conversation.locale,
+            )
         )
         if chat_classification is not None:
             if not chat_classification.in_scope:
@@ -153,6 +256,26 @@ class QuickQuoteService:
             ],
         )
         understanding = self._understanding.analyze(message=text, context=context)
+        if len(understanding.jobs) == 1:
+            understood = understanding.jobs[0]
+            if understood.action == ConversationActionV1.TOTAL:
+                return self._handle_total_summary(
+                    conversation_id=conversation_id,
+                    locale=understanding.detected_language or conversation.locale,
+                )
+            if understood.action == ConversationActionV1.REMOVE:
+                return self._handle_remove_job(
+                    conversation_id=conversation_id,
+                    locale=understanding.detected_language or conversation.locale,
+                    understood=understood,
+                    existing_jobs=existing_jobs,
+                )
+            if self._needs_job_clarification(understood):
+                return self._handle_job_clarification(
+                    conversation_id=conversation_id,
+                    locale=understanding.detected_language or conversation.locale,
+                )
+
         quick_quotes = [
             self._process_understood_job(
                 conversation_id=conversation_id,
@@ -193,6 +316,152 @@ class QuickQuoteService:
             assistant_message_id=assistant_message.id,
             assistant_text=customer_text,
             quotes=quick_quotes,
+        )
+
+    @staticmethod
+    def _estimation_intake_active(history: list[Any]) -> bool:
+        last_assistant = next(
+            (entry for entry in reversed(history) if entry.role == MessageRole.ASSISTANT),
+            None,
+        )
+        return bool(
+            last_assistant
+            and last_assistant.content.startswith("Metrajı hemen yaklaşık olarak hesaplayabilirim.")
+        )
+
+    @staticmethod
+    def _needs_job_clarification(understood: JobUnderstandingV1) -> bool:
+        return (
+            understood.action == ConversationActionV1.CLARIFY
+            and understood.service_candidate is None
+            and understood.job_reference is None
+            and not understood.constraints
+        )
+
+    def _handle_job_clarification(
+        self,
+        *,
+        conversation_id: str,
+        locale: str,
+    ) -> ChatTurnResponseV1:
+        customer_text = (
+            "Bu metrajı hangi iş kalemine uygulayacağımı belirtir misiniz? "
+            "Örneğin demir, kalıp veya duvar işçiliği."
+            if locale == "tr"
+            else "Which work item should this quantity apply to? For example, reinforcement, "
+            "formwork, or masonry labor."
+        )
+        assistant_message = self._conversations.add_message(
+            conversation_id=conversation_id,
+            role=MessageRole.ASSISTANT,
+            content=customer_text,
+        )
+        return ChatTurnResponseV1(
+            conversation_id=conversation_id,
+            assistant_message_id=assistant_message.id,
+            assistant_text=customer_text,
+            quotes=[],
+        )
+
+    def _handle_remove_job(
+        self,
+        *,
+        conversation_id: str,
+        locale: str,
+        understood: JobUnderstandingV1,
+        existing_jobs: list[CustomerJob],
+    ) -> ChatTurnResponseV1:
+        target = self._target_job(understood, existing_jobs, is_multi_job=False)
+        if target is None:
+            customer_text = (
+                "Silinecek iş kalemini bulamadım. Demir, kalıp veya duvar gibi kalemi belirtin."
+                if locale == "tr"
+                else "I could not find the item to remove. Please name the work item."
+            )
+        else:
+            removed = self._conversations.remove_job(
+                conversation_id=conversation_id,
+                job_id=target.id,
+            )
+            service = (
+                self._services.get_active(target.service_code) if target.service_code else None
+            )
+            label = service.label(locale) if service else target.service_code or "İş kalemi"
+            customer_text = (
+                f"{label} hesap defterinden çıkarıldı."
+                if locale == "tr"
+                else f"{label} was removed from the estimate ledger."
+            )
+            if removed is not None:
+                append_outbox(
+                    self._session,
+                    event_type="job.removed.v1",
+                    aggregate_id=removed.id,
+                    payload={"conversation_id": conversation_id, "job_id": removed.id},
+                )
+
+        assistant_message = self._conversations.add_message(
+            conversation_id=conversation_id,
+            role=MessageRole.ASSISTANT,
+            content=customer_text,
+        )
+        return ChatTurnResponseV1(
+            conversation_id=conversation_id,
+            assistant_message_id=assistant_message.id,
+            assistant_text=customer_text,
+            quotes=[],
+        )
+
+    @staticmethod
+    def _is_deterministic_quote_turn(text: str, existing_jobs: list[CustomerJob]) -> bool:
+        folded = fold_text(text)
+        service_markers = ("demir", "donati", "kalip", "duvar")
+        has_service = any(marker in folded for marker in service_markers)
+        commercial_markers = (
+            "fiyat",
+            "birim",
+            "iscilik",
+            "metraj",
+            "metrekare",
+            "m2",
+            "ne kadar",
+            "kacti",
+            "revize",
+            "guncelle",
+            "degistir",
+        )
+        if has_service and (
+            any(marker in folded for marker in commercial_markers)
+            or bool(re.search(r"\d", folded))
+            or len(folded.split()) <= 3
+        ):
+            return True
+
+        has_pending_job = any(job.quantity is None for job in existing_jobs)
+        return has_pending_job and (
+            bool(re.search(r"\d", folded))
+            or any(marker in folded for marker in ("malzemeli", "malzemesiz"))
+        )
+
+    @staticmethod
+    def _is_project_reporting_or_scheduling_turn(text: str) -> bool:
+        folded = fold_text(text)
+        return any(
+            marker in folded
+            for marker in (
+                "bitti",
+                "tamamlandi",
+                "eksik",
+                "kusur",
+                "raporla",
+                "raporlan",
+                "is program",
+                "programla",
+                "takvim",
+                "kalan isler",
+                "ilerleme",
+                "punch list",
+            )
         )
 
     @staticmethod
@@ -260,7 +529,8 @@ class QuickQuoteService:
     def _is_total_summary_request(text: str) -> bool:
         folded = fold_text(text)
         return (
-            "genel toplam" in folded
+            folded.strip(" ?.!") in {"toplam", "toplami"}
+            or "genel toplam" in folded
             or "toplam metraj" in folded
             or "hepsi ne kadar" in folded
             or (
@@ -279,7 +549,10 @@ class QuickQuoteService:
         locale: str,
     ) -> ChatTurnResponseV1:
         stored_quotes = self._quotes.list_latest_by_conversation(conversation_id)
-        jobs = {job.id: job for job in self._conversations.list_jobs(conversation_id)}
+        ordered_jobs = self._conversations.list_jobs(conversation_id)
+        jobs = {job.id: job for job in ordered_jobs}
+        job_order = {job.id: index for index, job in enumerate(ordered_jobs)}
+        stored_quotes.sort(key=lambda quote: job_order.get(quote.job_id, len(job_order)))
         lines: list[str] = []
         grand_total = Decimal(0)
         missing_quantity = False
@@ -359,7 +632,17 @@ class QuickQuoteService:
             ],
         )
         understanding = self._understanding.analyze(message=text, context=context)
-        understood = understanding.jobs[0]
+        quantity_understanding = next(
+            (job.quantity for job in understanding.jobs if job.quantity is not None),
+            None,
+        )
+        location_understanding = next(
+            (job.location for job in understanding.jobs if job.location is not None),
+            None,
+        )
+        evidence = [
+            item.model_dump(mode="json") for job in understanding.jobs for item in job.evidence
+        ]
         pending = next(
             (
                 job
@@ -369,15 +652,15 @@ class QuickQuoteService:
             ),
             None,
         )
-        quantity = understood.quantity.value if understood.quantity else None
-        unit = understood.quantity.unit if understood.quantity else None
+        quantity = quantity_understanding.value if quantity_understanding else None
+        unit = quantity_understanding.unit if quantity_understanding else None
         if quantity is None and pending is not None:
             quantity = pending.quantity
             unit = pending.unit
 
         explicit_location = None
-        if understood.location:
-            explicit_location = understood.location.code or understood.location.display_name
+        if location_understanding:
+            explicit_location = location_understanding.code or location_understanding.display_name
         inherited_location = pending.location_code if pending else None
         location = self._location_normalizer.normalize(
             explicit_location or inherited_location,
@@ -395,7 +678,7 @@ class QuickQuoteService:
                 location_code=location.code,
                 location_label=location.display_name,
                 scope_state=[],
-                provenance=[item.model_dump(mode="json") for item in understood.evidence],
+                provenance=evidence,
             )
             quantity_question = "" if quantity is not None else " Toplam metraj kaç m²?"
             clarification = (
@@ -444,7 +727,7 @@ class QuickQuoteService:
                     "pricing_role": "SCOPE_DECISION",
                 }
             ],
-            provenance=[item.model_dump(mode="json") for item in understood.evidence],
+            provenance=evidence,
         )
 
         component_codes = [
@@ -466,6 +749,7 @@ class QuickQuoteService:
                 conversation_id=conversation_id,
                 locale=locale,
                 understood=JobUnderstandingV1(
+                    action=ConversationActionV1.UPDATE,
                     service_candidate=service_code,
                     service_confidence=1,
                     quantity=component_quantity,
@@ -491,10 +775,7 @@ class QuickQuoteService:
 
     @staticmethod
     def _rough_scope_mode(folded: str) -> str | None:
-        if any(
-            marker in folded
-            for marker in ("malzemesiz", "malzeme haric", "sadece iscilik")
-        ):
+        if any(marker in folded for marker in ("malzemesiz", "malzeme haric", "sadece iscilik")):
             return "LABOR_ONLY"
         if any(marker in folded for marker in ("malzemeli", "malzeme dahil")):
             return "FORMWORK_MATERIAL_INCLUDED"
@@ -596,6 +877,16 @@ class QuickQuoteService:
             locale=locale,
             quotes=[],
         )
+        latest_user_message = next(
+            (
+                message.content
+                for message in reversed(context.messages)
+                if message.role.upper() == "USER"
+            ),
+            "",
+        )
+        if context.document_context and self._is_document_question(latest_user_message):
+            return ConstructionChatClassification(in_scope=True, quote_intent=False)
         try:
             return self._construction_chat_provider.classify(context)
         except ConstructionChatProviderError as exc:
@@ -634,13 +925,15 @@ class QuickQuoteService:
         conversation_id: str,
         locale: str,
     ) -> ChatTurnResponseV1:
-        fallback = (
-            "Bu teknik soruyu şu anda ayrıntılı yanıtlayamıyorum. "
-            "İsterseniz yapınızın türünü ve uygulama koşullarını paylaşın."
-            if locale == "tr"
-            else "I cannot answer that technical question in detail right now. "
-            "You can share the building type and application conditions."
+        latest_user_message = next(
+            (
+                message.content
+                for message in reversed(self._conversations.list_messages(conversation_id))
+                if message.role == MessageRole.USER
+            ),
+            "",
         )
+        fallback = self._safe_technical_fallback(latest_user_message, locale)
         customer_text = self._render_customer_response(
             conversation_id=conversation_id,
             locale=locale,
@@ -681,27 +974,204 @@ class QuickQuoteService:
             locale=locale,
             quotes=quotes,
         )
+        safe_fallback = self._document_analysis_fallback(context) or fallback
         try:
             natural_text = self._construction_chat_provider.respond(context)
         except ConstructionChatProviderError as exc:
             self._log_chat_fallback(exc)
-            return self._append_legal_sources(fallback, context.legal_context)
+            with_legal_sources = self._append_legal_sources(
+                safe_fallback,
+                context.legal_context,
+            )
+            return self._append_document_sources(
+                with_legal_sources,
+                context.document_context,
+            )
 
         monetary_output_is_unsafe = MONEY_PATTERN.search(natural_text) and (
             bool(quotes) or not context.legal_context
         )
-        if monetary_output_is_unsafe or INTERNAL_OUTPUT_PATTERN.search(natural_text):
+        if (
+            monetary_output_is_unsafe
+            or INTERNAL_OUTPUT_PATTERN.search(natural_text)
+            or self._technical_output_is_unsafe(natural_text, context)
+        ):
             logger.warning(
                 "construction_chat_unsafe_output_blocked",
                 provider=self._construction_chat_provider.provider_name,
             )
-            return self._append_legal_sources(fallback, context.legal_context)
+            with_legal_sources = self._append_legal_sources(
+                safe_fallback,
+                context.legal_context,
+            )
+            return self._append_document_sources(
+                with_legal_sources,
+                context.document_context,
+            )
         has_commercial_result = any(
             quote.status in {"QUOTED", "PRICE_NOT_CONFIGURED"} for quote in quotes
         )
         if not has_commercial_result:
-            return self._append_legal_sources(natural_text, context.legal_context)
+            with_legal_sources = self._append_legal_sources(
+                natural_text,
+                context.legal_context,
+            )
+            return self._append_document_sources(
+                with_legal_sources,
+                context.document_context,
+            )
         return f"{fallback}\n\n{natural_text}"
+
+    @staticmethod
+    def _technical_output_is_unsafe(
+        text: str,
+        context: ConstructionChatContext,
+    ) -> bool:
+        allowed_source_ids = {
+            *(str(source["id"]) for source in context.legal_context),
+            *(str(source["id"]) for source in context.document_context),
+        }
+        cited_source_ids = set(re.findall(r"\[((?:K|D)\d+)\]", text, flags=re.IGNORECASE))
+        if not cited_source_ids.issubset(allowed_source_ids):
+            return True
+
+        latest_user_message = next(
+            (
+                message.content
+                for message in reversed(context.messages)
+                if message.role.upper() == "USER"
+            ),
+            "",
+        )
+        document_question = bool(
+            context.document_context
+        ) and QuickQuoteService._is_document_question(latest_user_message)
+        if document_question and not any(
+            source_id.startswith("D") for source_id in cited_source_ids
+        ):
+            return True
+
+        without_list_numbers = re.sub(r"(?m)^\s*\d+[.)]\s*", "", text)
+        without_citations = re.sub(
+            r"\[(?:K|D)\d+\]",
+            "",
+            without_list_numbers,
+            flags=re.IGNORECASE,
+        )
+        without_trusted_concrete_classes = re.sub(
+            r"\bC(?:30/37|35/45)\b",
+            "",
+            without_citations,
+            flags=re.IGNORECASE,
+        )
+        numeric_claims = set(re.findall(r"\b\d+(?:[.,/]\d+)*\b", without_trusted_concrete_classes))
+        if numeric_claims:
+            reference_text = " ".join(
+                [
+                    *(message.content for message in context.messages if message.role == "USER"),
+                    *(str(source.get("excerpt", "")) for source in context.legal_context),
+                    *(
+                        f"{source.get('excerpt', '')} "
+                        f"{source.get('metrics', '')} {source.get('summary', '')}"
+                        for source in context.document_context
+                    ),
+                ]
+            )
+            if any(number not in reference_text for number in numeric_claims):
+                return True
+
+        normalized_parts = [
+            re.sub(r"\s+", " ", part).strip().casefold()
+            for part in re.split(r"[.!?\n]+", text)
+            if len(part.strip()) >= 30
+        ]
+        return len(normalized_parts) != len(set(normalized_parts))
+
+    @staticmethod
+    def _document_analysis_fallback(context: ConstructionChatContext) -> str | None:
+        latest_user_message = next(
+            (
+                message.content
+                for message in reversed(context.messages)
+                if message.role.upper() == "USER"
+            ),
+            "",
+        )
+        if not context.document_context or not QuickQuoteService._is_document_question(
+            latest_user_message
+        ):
+            return None
+
+        document = context.document_context[-1]
+        source_id = str(document["id"])
+        filename = str(document["filename"])
+        summary = str(document.get("summary") or "Dosya başarıyla analiz edildi.")
+        excerpt = re.sub(r"\s+", " ", str(document.get("excerpt") or "")).strip()
+        lines = [
+            "Yüklenen dosyanın doğrulanmış yerel analiz sonucu:",
+            f"- **{filename}:** {summary} [{source_id}]",
+        ]
+        if excerpt:
+            lines.append(f"- **Okunan metin:** “{excerpt[:1200]}” [{source_id}]")
+        else:
+            lines.append(f"- Dosyada güvenilir biçimde okunabilen metin bulunamadı. [{source_id}]")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _safe_technical_fallback(message: str, locale: str) -> str:
+        if locale != "tr":
+            return (
+                "Check the approved project, dimensions and levels, temporary stability, "
+                "connections, site safety, and inspection records before proceeding. A qualified "
+                "engineer should confirm project-specific requirements on site."
+            )
+
+        folded = fold_text(message)
+        if QuickQuoteService._is_project_reporting_or_scheduling_turn(message):
+            return (
+                "Kaba inşaat tamamlandıysa önce mevcut durumu kayıt altına alıp ince imalatları "
+                "ölçülebilir bir iş programına bağlayalım:\n"
+                "- Kat ve mahal bazlı eksik/kusur listesi\n"
+                "- Her imalat için metraj, mevcut ilerleme ve kalan miktar\n"
+                "- İşlerin öncelik ve bağımlılık sırası\n"
+                "- Ekip, malzeme ve onay ihtiyaçları\n"
+                "- Hedef tarihlere bağlı haftalık uygulama ve kontrol planı\n\n"
+                "Başlamak için güncel mimari projeyi, kat/mahal listesini, sahadaki eksikleri "
+                "ve hedef teslim tarihini paylaşın; rapor ile iş programını aynı veri üzerinden "
+                "hazırlayalım."
+            )
+        if "kalip" in folded:
+            return (
+                "Kalıp uygulamasında şu sırayla kontrol edin:\n"
+                "- Onaylı projedeki aks, kot, kesit ve ölçüler\n"
+                "- Kalıp yüzeyi, birleşimler ve beton şerbetine karşı sızdırmazlık\n"
+                "- Dikme, payanda, çapraz ve mesnetlerin stabilitesi\n"
+                "- Donatı, pas payı, tesisat geçişleri ve gömülü parçalar\n"
+                "- Döküm sırasında kaçak, açılma ve aşırı deformasyon takibi\n"
+                "- Sökümün proje, beton dayanımı ve yetkili mühendis onayına göre yapılması\n\n"
+                "Kesin uygulama; kalıp sistemi, eleman tipi ve döşeme yüksekliğine göre "
+                "sahada doğrulanmalıdır."
+            )
+        if any(marker in folded for marker in ("demir", "donati")):
+            return (
+                "Donatı uygulamasında onaylı statik projedeki çap, adet, aralık, bindirme ve "
+                "ankrajları esas alın. Donatının temizliği, sabitlenmesi, pas payı, sehpa ve "
+                "gömülü parçaları beton öncesi kontrol tutanağıyla doğrulayın. Projede bulunmayan "
+                "bir donatı ölçüsünü sahada tahmin ederek değiştirmeyin."
+            )
+        if "duvar" in folded:
+            return (
+                "Duvar uygulamasında aks, kot, düşeylik, derz düzeni, kapı-pencere boşlukları, "
+                "lentolar ve taşıyıcı sisteme bağlantılar projeye göre kontrol edilmelidir. "
+                "Tesisat geçişleri önceden koordine edilmeli; malzeme ve harç/adeziv üretici "
+                "talimatına uygun uygulanmalıdır."
+            )
+        return (
+            "Uygulamaya başlamadan onaylı proje ve şartnameyi, ölçü/aks/kotları, malzeme "
+            "uygunluğunu, geçici stabiliteyi, iş güvenliğini ve saha kontrol kayıtlarını birlikte "
+            "doğrulayın. Yapıya özgü kararlar yetkili mühendis ve yerinde incelemeyle "
+            "netleştirilmelidir."
+        )
 
     def _chat_context(
         self,
@@ -717,7 +1187,10 @@ class QuickQuoteService:
         )
         legal_hits = (
             self._legal_knowledge.search(latest_user_message, limit=3)
-            if self._legal_knowledge is not None and latest_user_message and not quotes
+            if self._legal_knowledge is not None
+            and latest_user_message
+            and not quotes
+            and self._needs_legal_sources(latest_user_message)
             else []
         )
         return ConstructionChatContext(
@@ -738,7 +1211,54 @@ class QuickQuoteService:
                 }
                 for index, hit in enumerate(legal_hits, start=1)
             ],
+            document_context=[
+                {
+                    "id": f"D{index}",
+                    "analysis_id": analysis.analysis_id,
+                    "filename": analysis.filename,
+                    "format": analysis.format,
+                    "summary": analysis.summary,
+                    "excerpt": analysis.extracted_text[:3500],
+                    "metrics": self._document_metrics_context(analysis.metrics),
+                    "sha256": analysis.sha256,
+                }
+                for index, analysis in (
+                    list(
+                        enumerate(
+                            self._document_analyses.list_for_conversation(conversation_id),
+                            start=1,
+                        )
+                    )[-3:]
+                    if self._document_analyses is not None
+                    else []
+                )
+            ],
         )
+
+    @staticmethod
+    def _document_metrics_context(metrics: dict[str, Any]) -> dict[str, Any]:
+        bounded: dict[str, Any] = {}
+        for key, value in metrics.items():
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                bounded[key] = value
+            elif key in {"ocr_pages", "layers"} and isinstance(value, list):
+                bounded[key] = value[:50]
+            elif key in {"entity_types", "element_types"} and isinstance(value, dict):
+                bounded[key] = dict(list(value.items())[:50])
+        return bounded
+
+    @staticmethod
+    def _needs_legal_sources(message: str) -> bool:
+        folded = fold_text(message)
+        return any(
+            re.search(rf"(?<!\w){re.escape(marker)}\w*", folded) is not None
+            for marker in LEGAL_QUERY_MARKERS
+        )
+
+    @staticmethod
+    def _is_document_question(message: str) -> bool:
+        folded = fold_text(message)
+        return any(marker in folded for marker in DOCUMENT_QUERY_MARKERS)
 
     @staticmethod
     def _append_legal_sources(text: str, legal_context: list[dict[str, Any]]) -> str:
@@ -756,6 +1276,21 @@ class QuickQuoteService:
                 f"- [{source['id']}] {source['title']} — {url} (erişim: {fetched_on})"
             )
         return f"{text}\n\nResmî kaynaklar:\n" + "\n".join(source_lines)
+
+    @staticmethod
+    def _append_document_sources(
+        text: str,
+        document_context: list[dict[str, Any]],
+    ) -> str:
+        cited_ids = set(re.findall(r"\[(D\d+)\]", text, flags=re.IGNORECASE))
+        source_lines = [
+            f"- [{source['id']}] {source['filename']} ({source['format'].lstrip('.').upper()})"
+            for source in document_context
+            if str(source["id"]) in cited_ids
+        ]
+        if not source_lines:
+            return text
+        return f"{text}\n\nProje kaynakları:\n" + "\n".join(source_lines)
 
     def _log_chat_fallback(self, exc: ConstructionChatProviderError) -> None:
         if self._construction_chat_provider is None:
@@ -979,13 +1514,13 @@ class QuickQuoteService:
         )
         if pending_match is not None:
             return pending_match
-        if understood.location is None:
+        if understood.location is None or understood.action in {
+            ConversationActionV1.UPDATE,
+            ConversationActionV1.REMOVE,
+            ConversationActionV1.QUERY,
+        }:
             existing_match = next(
-                (
-                    job
-                    for job in reversed(existing_jobs)
-                    if job.service_code in service_family
-                ),
+                (job for job in reversed(existing_jobs) if job.service_code in service_family),
                 None,
             )
             if existing_match is not None:

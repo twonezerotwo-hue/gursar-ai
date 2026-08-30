@@ -1,0 +1,160 @@
+sources:
+  - key: afad-tbdy-2018
+    name: Türkiye Bina Deprem Yönetmeliği 2018
+    authority: T.C. İçişleri Bakanlığı - AFAD
+    source_url: https://www.afad.gov.tr/kurumlar/afad.gov.tr/2309/files/TBDY_2018.pdf
+    discipline: structural
+    subdiscipline: earthquake_engineering
+    topic: building_seismic_design
+    document_type: regulation
+    source_class: REGULATION
+    quality_score: 100
+    license: official-publication
+    copyright_status: public-official-document
+    redistribution_policy: ALLOWED
+    published_date: 2018-03-18
+    effective_from: 2019-01-01
+    version_label: "2018"
+    jurisdiction: TR
+  - key: csb-planned-areas-2026-amendment
+    name: Planlı Alanlar İmar Yönetmeliği 2026 Değişikliği Duyurusu
+    authority: T.C. Çevre, Şehircilik ve İklim Değişikliği Bakanlığı
+    source_url: https://meslekihizmetler.csb.gov.tr/haberler/planli-alanlar-imar-yonetmeligi-nde-degisiklik-yapildi-305960
+    discipline: architecture
+    subdiscipline: zoning
+    topic: planned_areas
+    document_type: official_guidance
+    source_class: OFFICIAL_GUIDANCE
+    quality_score: 100
+    license: official-web-publication
+    copyright_status: public-official-page
+    redistribution_policy: ALLOWED
+    published_date: 2026-07-01
+    effective_from: 2026-07-01
+    version_label: "2026-07-01"
+    jurisdiction: TR
+  - key: yfk-unit-prices-2026
+    name: Yüksek Fen Kurulu 2026 Birim Fiyatlar Kataloğu
+    authority: T.C. Çevre, Şehircilik ve İklim Değişikliği Bakanlığı - YFK
+    source_url: https://yfk.csb.gov.tr/birim-fiyatlar-100468
+    discipline: cost
+    subdiscipline: official_unit_prices
+    topic: yfk_2026
+    document_type: unit_price_catalog
+    source_class: OFFICIAL_UNIT_PRICE
+    quality_score: 100
+    license: official-web-publication
+    copyright_status: public-official-page
+    redistribution_policy: ALLOWED
+    effective_from: 2026-01-01
+    version_label: "2026"
+    jurisdiction: TR
+    discover_links: true
+  - key: official-gazette-archive
+    name: T.C. Resmî Gazete Arşivi
+    authority: T.C. Cumhurbaşkanlığı İdari İşler Başkanlığı
+    source_url: https://www.resmigazete.gov.tr/eskiler/2026/07/20260701.htm
+    discipline: law
+    subdiscipline: official_gazette
+    topic: current_amendments
+    document_type: official_gazette_index
+    source_class: LAW
+    quality_score: 100
+    license: official-publication
+    copyright_status: public-official-document
+    redistribution_policy: ALLOWED
+    published_date: 2026-07-01
+    effective_from: 2026-07-01
+    version_label: "33297"
+    jurisdiction: TR
+  - key: buildingsmart-ifc-4-3-2
+    name: IFC 4.3.2.0 Official Documentation
+    authority: buildingSMART International
+    source_url: https://standards.buildingsmart.org/IFC/RELEASE/IFC4_3/
+    discipline: bim
+    subdiscipline: ifc
+    topic: ifc_4_3
+    document_type: reference_standard
+    source_class: REFERENCE_STANDARD
+    quality_score: 100
+    license: CC-BY-ND-4.0
+    copyright_status: copyrighted-some-rights-reserved
+    redistribution_policy: ALLOWED
+    published_date: 2023-01-01
+    version_label: "4.3.2.0"
+    jurisdiction: INTERNATIONAL
+  - key: tse-ts-500
+    name: TS 500 Betonarme Yapıların Tasarım ve Yapım Kuralları
+    authority: Türk Standardları Enstitüsü
+    source_url: https://www.tse.org.tr/
+    discipline: structural
+    subdiscipline: reinforced_concrete
+    topic: design_standard
+    document_type: standard_metadata
+    source_class: REFERENCE_STANDARD
+    quality_score: 100
+    license: licensed-standard
+    copyright_status: copyrighted
+    redistribution_policy: METADATA_ONLY
+    version_label: TS-500
+    jurisdiction: TR
+  - key: tse-ts-498
+    name: TS 498 Yapı Elemanlarının Boyutlandırılmasında Alınacak Yükler
+    authority: Türk Standardları Enstitüsü
+    source_url: https://www.tse.org.tr/
+    discipline: structural
+    subdiscipline: structural_loads
+    topic: design_loads
+    document_type: standard_metadata
+    source_class: REFERENCE_STANDARD
+    quality_score: 100
+    license: licensed-standard
+    copyright_status: copyrighted
+    redistribution_policy: METADATA_ONLY
+    version_label: TS-498
+    jurisdiction: TR
+  - key: tse-ts-708
+    name: TS 708 Beton Çelik Çubukları
+    authority: Türk Standardları Enstitüsü
+    source_url: https://www.tse.org.tr/
+    discipline: materials
+    subdiscipline: reinforcement
+    topic: reinforcing_steel
+    document_type: standard_metadata
+    source_class: REFERENCE_STANDARD
+    quality_score: 100
+    license: licensed-standard
+    copyright_status: copyrighted
+    redistribution_policy: METADATA_ONLY
+    version_label: TS-708
+    jurisdiction: TR
+  - key: tse-ts-en-206
+    name: TS EN 206 Beton - Özellik, Performans, İmalat ve Uygunluk
+    authority: Türk Standardları Enstitüsü
+    source_url: https://www.tse.org.tr/
+    discipline: materials
+    subdiscipline: concrete
+    topic: concrete_standard
+    document_type: standard_metadata
+    source_class: REFERENCE_STANDARD
+    quality_score: 100
+    license: licensed-standard
+    copyright_status: copyrighted
+    redistribution_policy: METADATA_ONLY
+    version_label: TS-EN-206
+    jurisdiction: TR
+  - key: tse-ts-13515
+    name: TS 13515 TS EN 206'nın Uygulanmasına Yönelik Tamamlayıcı Standart
+    authority: Türk Standardları Enstitüsü
+    source_url: https://www.tse.org.tr/
+    discipline: materials
+    subdiscipline: concrete
+    topic: concrete_application
+    document_type: standard_metadata
+    source_class: REFERENCE_STANDARD
+    quality_score: 100
+    license: licensed-standard
+    copyright_status: copyrighted
+    redistribution_policy: METADATA_ONLY
+    version_label: TS-13515
+    jurisdiction: TR

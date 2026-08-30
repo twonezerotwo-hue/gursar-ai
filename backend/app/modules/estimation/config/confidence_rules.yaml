@@ -1,0 +1,25 @@
+version: "1.0"
+
+classes:
+  A: {score: 97, label: VERY_HIGH, mode: DIRECT_TAKEOFF}
+  B: {score: 90, label: HIGH, mode: HYBRID_ESTIMATE}
+  C: {score: 80, label: HIGH, mode: GEOMETRY_AWARE_ESTIMATE}
+  D: {score: 70, label: MEDIUM, mode: EARLY_STAGE_ESTIMATE}
+  E: {score: 50, label: LOW, mode: GROSS_AREA_ESTIMATE}
+
+penalties:
+  unknown_structural_system: 3
+  unknown_soil: 2
+  unknown_foundation: 2
+  unknown_floor_height: 2
+  unknown_facade_ratio: 2
+  very_large_span: 20
+  basement_geometry_missing: 15
+  seismic_assumed: 2
+
+labels:
+  - {min_score: 90, label: VERY_HIGH}
+  - {min_score: 75, label: HIGH}
+  - {min_score: 55, label: MEDIUM}
+  - {min_score: 35, label: LOW}
+  - {min_score: 0, label: VERY_LOW}

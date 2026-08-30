@@ -1,0 +1,15 @@
+{
+  "version": "GOLDEN_VISION_V1",
+  "training_allowed": false,
+  "cases": [
+    {"id": "sheet-arch-01", "task": "SHEET_CLASSIFICATION", "class_name": "ARCHITECTURAL"},
+    {"id": "title-01", "task": "TITLE_BLOCK_DETECTION", "class_name": "TITLE_BLOCK", "bbox": [0.70, 0.70, 0.98, 0.98]},
+    {"id": "region-plan-01", "task": "VIEW_REGION_DETECTION", "class_name": "PLAN_REGION", "bbox": [0.02, 0.02, 0.68, 0.95]},
+    {"id": "room-01", "task": "ROOM_DETECTION", "class_name": "ROOM", "bbox": [0.10, 0.10, 0.35, 0.35]},
+    {"id": "wall-01", "task": "WALL_DETECTION", "class_name": "WALL", "bbox": [0.08, 0.08, 0.38, 0.11]},
+    {"id": "door-01", "task": "DOOR_DETECTION", "class_name": "DOOR", "bbox": [0.34, 0.22, 0.39, 0.30]},
+    {"id": "window-01", "task": "WINDOW_DETECTION", "class_name": "WINDOW", "bbox": [0.12, 0.08, 0.20, 0.11]},
+    {"id": "column-01", "task": "COLUMN_DETECTION", "class_name": "COLUMN", "bbox": [0.45, 0.45, 0.50, 0.52]},
+    {"id": "stair-01", "task": "STAIR_DETECTION", "class_name": "STAIR", "bbox": [0.55, 0.20, 0.68, 0.40]}
+  ]
+}

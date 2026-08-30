@@ -29,3 +29,5 @@ class ConversationResponse(BaseModel):
     conversation_id: str
     locale: str
     messages: list[MessageResponse]
+    conversation_owner_token: str | None = None
+    session_expires_at: datetime | None = None

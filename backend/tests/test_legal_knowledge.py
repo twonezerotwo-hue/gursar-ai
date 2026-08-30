@@ -49,6 +49,22 @@ class QuoteWithoutLegalContextProvider:
         return "Kayıtlı şirket birim fiyatı kullanıldı."
 
 
+class GeneralTechnicalAdviceProvider:
+    provider_name = "fake.general-technical-advice"
+
+    def classify(self, context: ConstructionChatContext) -> ConstructionChatClassification:
+        del context
+        return ConstructionChatClassification(in_scope=True, quote_intent=False)
+
+    def refusal(self, locale: str) -> str:
+        del locale
+        return "Kapsam dışı."
+
+    def respond(self, context: ConstructionChatContext) -> str:
+        assert context.legal_context == []
+        return "Kalıp kurulurken aks, kot, stabilite ve sızdırmazlık kontrol edilmelidir."
+
+
 def test_official_html_ingestion_discovers_documents_and_is_idempotent(app: FastAPI) -> None:
     catalog_url = "https://yfk.csb.gov.tr/sartnameler-test"
     regulation_url = "https://www.resmigazete.gov.tr/eskiler/2026/01/test.htm"
@@ -209,3 +225,21 @@ def test_quote_response_does_not_attach_unrelated_legal_sources(
     assert "700 TL/m² + KDV" in answer
     assert "Resmî kaynaklar:" not in answer
     assert source_url not in answer
+
+
+def test_general_technical_advice_does_not_receive_unrequested_legal_context(
+    client: TestClient,
+    app: FastAPI,
+    conversation_id: str,
+) -> None:
+    app.state.construction_chat_provider = GeneralTechnicalAdviceProvider()
+
+    response = client.post(
+        f"/api/v1/conversations/{conversation_id}/messages",
+        json={"text": "Kalıp işçiliğinde nelere dikkat edilmeli?"},
+    )
+
+    assert response.status_code == 200
+    answer = response.json()["assistant_text"]
+    assert "aks, kot, stabilite" in answer
+    assert "Resmî kaynaklar:" not in answer

@@ -38,6 +38,10 @@ flowchart TB
     LegalSearch --> OfficialCorpus["Versioned official corpus"]
     LegalSearch --> ConstructionChat
     Conversation --> Quote["Quick Quote application service"]
+    API --> Projects["Projects"]
+    API --> Documents["Documents"]
+    Documents --> Storage["Local storage port"]
+    Documents --> PDFInspector["Strict PDF inspector port"]
     Quote --> Catalog["Service Catalog repository"]
     Quote --> WorkPackage["Work Package repository"]
     Quote --> Pricing["Pricing repository"]
@@ -71,6 +75,8 @@ decision. The customer response includes a de-duplicated official-source appendi
 | Quick quote | `quick_quotes` |
 | QR | `qr_sources` |
 | Core infrastructure | `audit_events`, `outbox_events` |
+| Projects | `projects` |
+| Documents | `documents`, `document_versions`, `sheets` |
 
 Messages and snapshots are append-only. Price changes create new rows. Customer jobs are current
 working projections whose changes are reconstructable from immutable messages and snapshots.

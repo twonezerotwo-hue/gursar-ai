@@ -6,6 +6,7 @@ from difflib import SequenceMatcher
 
 from app.contracts.v1.customer_understanding import (
     FACADE_SERVICE_CONSTRAINT,
+    ConversationActionV1,
     CustomerUnderstandingContextV1,
     CustomerUnderstandingResultV1,
     EvidenceV1,
@@ -70,10 +71,15 @@ ADDITION_PATTERNS = {
 }
 
 QUANTITY_PATTERN = re.compile(
-    r"(?<![\w])(?P<number>\d+(?:[.,]\d+)?)\s*(?P<multiplier>bin|k)?"
+    r"(?<![\w])(?P<number>[+-]?\d+(?:[.,]\d+)?)\s*(?P<multiplier>bin|k)?"
     r"\s*(?P<unit>m2|m²|metrekare|metre\s*kare|metre)?\b",
     re.IGNORECASE,
 )
+UNSUPPORTED_QUANTITY_UNIT_PATTERN = re.compile(
+    r"(?<![\w])[+-]?\d+(?:[.,]\d+)?\s*(?:m3|m³|metrekup|metre\s*kup|kg|ton|adet)\b",
+    re.IGNORECASE,
+)
+MAX_QUANTITY = Decimal("10000000")
 
 
 class RuleBasedCustomerUnderstandingProvider:
@@ -86,7 +92,9 @@ class RuleBasedCustomerUnderstandingProvider:
         message: str,
         context: CustomerUnderstandingContextV1,
     ) -> CustomerUnderstandingResultV1:
-        segments = [part.strip() for part in re.split(r"[,;\n]+", message) if part.strip()]
+        segments = [
+            part.strip() for part in re.split(r"(?<!\d),(?!\d)|[;\n]+", message) if part.strip()
+        ]
         jobs = [
             self._understand_segment(segment, index, context)
             for index, segment in enumerate(segments or [message])
@@ -115,11 +123,15 @@ class RuleBasedCustomerUnderstandingProvider:
         ):
             service_code = "formwork.labor_material"
         quantity = self._detect_quantity(segment)
+        action = self._detect_action(
+            folded=folded,
+            service_code=service_code,
+            quantity=quantity,
+            context=context,
+        )
         location = self._detect_location(folded)
         constraints = []
-        if service_code is None and any(
-            pattern in folded for pattern in FACADE_AMBIGUITY_PATTERNS
-        ):
+        if service_code is None and any(pattern in folded for pattern in FACADE_AMBIGUITY_PATTERNS):
             constraints.append(FACADE_SERVICE_CONSTRAINT)
         evidence: list[EvidenceV1] = []
 
@@ -164,6 +176,7 @@ class RuleBasedCustomerUnderstandingProvider:
             job_reference = context.jobs[-1].job_id
 
         return JobUnderstandingV1(
+            action=action,
             job_reference=job_reference,
             service_candidate=service_code,
             service_confidence=0.98 if service_code else 0,
@@ -174,6 +187,52 @@ class RuleBasedCustomerUnderstandingProvider:
             constraints=constraints,
             evidence=evidence,
         )
+
+    @staticmethod
+    def _detect_action(
+        *,
+        folded: str,
+        service_code: str | None,
+        quantity: QuantityV1 | None,
+        context: CustomerUnderstandingContextV1,
+    ) -> ConversationActionV1:
+        if any(marker in folded for marker in ("sil", "cikar", "iptal et", "kaldir")):
+            return ConversationActionV1.REMOVE
+        if any(
+            marker in folded
+            for marker in ("genel toplam", "toplam ne", "toplam kac", "hepsi ne kadar")
+        ):
+            return ConversationActionV1.TOTAL
+        if any(
+            marker in folded for marker in ("revize", "guncelle", "degistir", "olarak yap", "olsun")
+        ):
+            return ConversationActionV1.UPDATE
+        if (
+            any(
+                marker in folded
+                for marker in (
+                    "fiyati",
+                    "fiyat nedir",
+                    "birim fiyat",
+                    "kacti",
+                    "neydi",
+                    "ne kadar",
+                )
+            )
+            and quantity is None
+        ):
+            return ConversationActionV1.QUERY
+        if quantity is not None and service_code is None:
+            return ConversationActionV1.UPDATE if context.jobs else ConversationActionV1.CLARIFY
+        if service_code is not None and quantity is not None:
+            matching_job_exists = any(job.service_code == service_code for job in context.jobs)
+            if matching_job_exists and not any(
+                marker in folded for marker in ("yeni kalem", "ayri kalem", "bir tane daha")
+            ):
+                return ConversationActionV1.UPDATE
+        if service_code is None:
+            return ConversationActionV1.CLARIFY
+        return ConversationActionV1.ADD
 
     @staticmethod
     def _detect_service(folded: str) -> str | None:
@@ -198,7 +257,10 @@ class RuleBasedCustomerUnderstandingProvider:
 
     @staticmethod
     def _detect_quantity(segment: str) -> QuantityV1 | None:
-        match = QUANTITY_PATTERN.search(fold_text(segment))
+        folded = fold_text(segment)
+        if UNSUPPORTED_QUANTITY_UNIT_PATTERN.search(folded):
+            return None
+        match = QUANTITY_PATTERN.search(folded)
         if not match:
             return None
         raw = match.group("number")
@@ -206,6 +268,8 @@ class RuleBasedCustomerUnderstandingProvider:
         value = RuleBasedCustomerUnderstandingProvider._parse_number(raw)
         if multiplier in {"bin", "k"}:
             value *= Decimal("1000")
+        if value <= 0 or value > MAX_QUANTITY:
+            return None
         return QuantityV1(value=value, unit="m2")
 
     @staticmethod

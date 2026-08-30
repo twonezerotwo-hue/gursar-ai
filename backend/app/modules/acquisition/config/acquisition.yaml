@@ -1,0 +1,222 @@
+acquisition:
+  mode: FULL_BOOTSTRAP
+  max_downloads: 10
+  max_total_download_gb: 5
+  max_single_dataset_gb: 2
+  min_free_storage_gb: 10
+  source_concentration_warning: 0.60
+search_terms:
+  - open source floor plan dataset commercial license
+  - architectural floor plan annotations CC BY
+  - floorplan segmentation dataset MIT license
+  - floor plan SVG dataset
+  - architectural drawing dataset commercial use
+  - annotated CAD floorplans
+  - building floorplan segmentation
+  - BIM dataset open license
+  - IFC sample projects CC BY
+  - architectural plan polygon dataset
+  - room wall door window annotation dataset
+  - commercially usable architectural floorplan dataset
+  - CC BY floor plan dataset
+  - MIT architectural drawing dataset
+  - Apache floor plan annotation dataset
+  - SVG architectural plans open license
+  - DXF architecture dataset commercial use
+  - vector PDF building plans open dataset
+  - BIM and floorplan paired dataset
+  - IFC PDF paired architecture dataset
+allowed_domains:
+  - github.com
+  - api.github.com
+  - codeload.github.com
+  - huggingface.co
+  - raw.githubusercontent.com
+  - buildingsmart.org
+  - technical.buildingsmart.org
+  - zenodo.org
+max_sources_per_run: 40
+max_downloads_per_run: 10
+synthetic:
+  enabled_by_default: false
+  project_count: 2000
+  batch_size: 50
+  seed_start: 0
+  seed_end: 1999
+  min_stair_project_ratio: 0.70
+  building_types:
+    - studio
+    - apartment_1_1
+    - apartment_2_1
+    - apartment_3_1
+    - office
+    - corridor_residential
+    - compact_residential
+    - large_residential
+readiness:
+  minimum_projects: 10
+  minimum_source_families: 3
+  minimum_gold_silver_ratio: 0.80
+  maximum_synthetic_ratio: 0.40
+  maximum_bim_derived_ratio: 0.50
+  foundational_all_required: true
+  minimum_quality_score: 70
+  maximum_duplicate_ratio: 0.05
+  source_concentration_warning: 0.60
+  class_targets:
+    WALL: 10000
+    ROOM: 5000
+    DOOR: 3000
+    WINDOW: 3000
+    COLUMN: 1000
+    STAIR: 500
+  real_data_targets:
+    WALL:
+      real_drawing: 5000
+    ROOM:
+      real_drawing: 3000
+    DOOR:
+      real_drawing: 2000
+    WINDOW:
+      real_drawing: 2000
+    COLUMN:
+      bim_or_real: 1000
+    STAIR:
+      bim_or_real: 300
+  sampling:
+    strategy: class_source_project_balanced
+    maximum_synthetic_ratio: 0.40
+    maximum_bim_derived_ratio: 0.50
+    maximum_source_concentration: 0.60
+real_data:
+  resplan_pilot_size: 500
+  resplan_full_batch_size: 1000
+  gni_pilot_ifc_count: 20
+  gni_second_stage_ifc_count: 100
+  gni_target_models: 100
+  ifc_import_batch_size: 10
+  ifc_render_batch_size: 10
+  ifc_min_quality_score: 70
+  max_concurrent_ifc_jobs: 1
+  external_project_import_batch_size: 100
+  ifc_plan_slice_height: 1.20
+  ifc_plan_projection_mode: FOOTPRINT
+  ifc_plan_render_scale: 1536
+  ifc_plan_margin: 0.04
+  ifc_plan_line_width: 2
+  ifc_geometry_settings_version: IFC_SECTION_GEOMETRY_V2_1
+  alignment_min_inliers: 3
+  alignment_min_inlier_ratio: 0.60
+  alignment_max_reprojection_error: 0.02
+  auto_silver_enabled: false
+seed_sources:
+  - name: buildingSMART IFC certification datasets
+    source_url: https://github.com/buildingSMART/Certification-datasets/archive/refs/heads/main.zip
+    repository_url: https://github.com/buildingSMART/Certification-datasets
+    publisher: buildingSMART International
+    description: Official IFC sample and regression files
+    formats: [IFC]
+    license_name: CC-BY-4.0
+    license_url: https://github.com/buildingSMART/Certification-datasets/blob/main/LICENSE
+    reputation_score: 95
+  - name: CubiCasa5K
+    source_url: https://github.com/CubiCasa/CubiCasa5k/archive/refs/heads/master.zip
+    repository_url: https://github.com/CubiCasa/CubiCasa5k
+    publisher: CubiCasa
+    description: Floor plan image dataset with polygon annotations
+    formats: [PNG, SVG, TXT]
+    annotation_available: true
+    ground_truth_available: true
+    license_name: CC-BY-NC-4.0
+    license_url: https://github.com/CubiCasa/CubiCasa5k/blob/master/LICENSE
+    reputation_score: 85
+  - name: Open IFC repository candidate
+    source_url: https://github.com/opensourceBIM
+    repository_url: https://github.com/opensourceBIM
+    publisher: opensourceBIM
+    description: BIM open-source organization; per-repository license review required
+    formats: [IFC]
+    reputation_score: 70
+bootstrap_sources:
+  - name: PERDAW initial door and window drawings
+    source_url: https://zenodo.org/records/10823907/files/initial_2d_images_of_objects.zip?download=1
+    repository_url: https://github.com/alexandru-filip/perdaw-dataset
+    publisher: Alexandru Filip
+    description: Architectural plan and elevation object crops with door and window class labels
+    formats: [JPG]
+    annotation_available: true
+    ground_truth_available: true
+    license_name: MIT
+    license_url: https://github.com/alexandru-filip/perdaw-dataset/blob/main/LICENSE
+    reputation_score: 82
+  - name: MLStructFP metadata and loader
+    source_url: https://github.com/MLSTRUCT/MLStructFP/archive/refs/heads/master.zip
+    repository_url: https://github.com/MLSTRUCT/MLStructFP
+    publisher: MLSTRUCT
+    description: Floor plan loader and public dataset metadata; dataset download requires a form
+    formats: [PNG, JSON]
+    annotation_available: true
+    ground_truth_available: true
+    license_name: MIT
+    license_url: https://github.com/MLSTRUCT/MLStructFP/blob/master/LICENSE
+    access_status: ACCESS_RESTRICTED
+    reputation_score: 85
+real_data_sources:
+  - name: ResPlan vector graph floor plans
+    source_url: https://raw.githubusercontent.com/m-agour/ResPlan/main/ResPlan.zip
+    repository_url: https://github.com/m-agour/ResPlan
+    publisher: Mohamed Abouagour and Eleftherios Garyfallidis
+    description: 17,000 metric vector residential floor plans derived from public real-estate listings
+    formats: [PKL, VECTOR]
+    annotation_available: true
+    ground_truth_available: true
+    license_name: CC-BY-4.0
+    license_url: https://github.com/m-agour/ResPlan/blob/main/README.md#license
+    upstream_license: UNKNOWN
+    upstream_url: null
+    derived_from: Public real-estate listing images; source platform identities are withheld by the publisher
+    lineage_verified: false
+    reputation_score: 88
+  - name: TUM GNI BIM Dataset
+    source_url: https://zenodo.org/api/records/19722012/files/2025_BIMfundamentals.zip/content
+    repository_url: https://github.com/ZijianWang-ZW/GNI-BIM-Dataset
+    publisher: Technical University of Munich Georg Nemetschek Institute
+    description: 224 anonymized IFC student models released with author consent
+    formats: [IFC]
+    annotation_available: false
+    ground_truth_available: true
+    license_name: CC-BY-4.0
+    license_url: https://github.com/ZijianWang-ZW/GNI-BIM-Dataset/blob/main/LICENSE
+    upstream_license: CC-BY-4.0
+    upstream_url: https://zenodo.org/records/19722012
+    derived_from: TUM GNI student coursework released with the authors' consent
+    lineage_verified: true
+    reputation_score: 96
+  - name: AEC-Bench document manifest
+    source_url: https://huggingface.co/datasets/nomic-ai/aec-bench
+    repository_url: https://huggingface.co/datasets/nomic-ai/aec-bench
+    publisher: Nomic AI
+    description: Real-world AEC document benchmark whose manifest points to upstream documents
+    formats: [PDF, MANIFEST]
+    annotation_available: true
+    ground_truth_available: true
+    license_name: Apache-2.0
+    license_url: https://huggingface.co/datasets/nomic-ai/aec-bench/blob/main/README.md
+    upstream_license: UNKNOWN
+    derived_from: Third-party AEC documents referenced by URL; per-document training rights are not established
+    lineage_verified: false
+    reputation_score: 90
+  - name: Floorplan Dataset 20022024 candidate
+    source_url: https://huggingface.co/datasets/umesh16071973/Floorplan_Dataset_20022024
+    repository_url: https://huggingface.co/datasets/umesh16071973/Floorplan_Dataset_20022024
+    publisher: Hugging Face community
+    description: Floor-plan image collection declared MIT but without a verifiable upstream provenance chain
+    formats: [PNG, JPG]
+    annotation_available: false
+    ground_truth_available: false
+    license_name: MIT
+    license_url: https://huggingface.co/datasets/umesh16071973/Floorplan_Dataset_20022024
+    upstream_license: UNKNOWN
+    derived_from: Upstream drawing provenance is not documented in the dataset card
+    lineage_verified: false
+    reputation_score: 58

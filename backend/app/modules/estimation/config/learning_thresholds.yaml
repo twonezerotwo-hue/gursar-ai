@@ -1,0 +1,15 @@
+version: "1.0"
+model_version: construction_estimator_v1.0.0
+coefficient_registry_version: coefficients_v1.0.0
+
+thresholds:
+  - {min_count: 0, max_count: 4, action: DO_NOT_CALIBRATE, reference_weight: 1.0, learned_weight: 0.0}
+  - {min_count: 5, max_count: 9, action: EXPERIMENTAL, reference_weight: 0.8, learned_weight: 0.2}
+  - {min_count: 10, max_count: 29, action: BLEND, reference_weight: 0.5, learned_weight: 0.5}
+  - {min_count: 30, max_count: 99, action: LOCAL_CALIBRATION, reference_weight: 0.25, learned_weight: 0.75}
+  - {min_count: 100, max_count: null, action: LOCAL_CALIBRATION, reference_weight: 0.1, learned_weight: 0.9}
+
+outlier:
+  mad_z_threshold: 3.5
+  iqr_multiplier: 1.5
+  minimum_sample: 5

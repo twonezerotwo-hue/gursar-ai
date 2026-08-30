@@ -16,6 +16,7 @@ class ConstructionChatContext:
     messages: list[ChatMessage]
     quote_results: list[dict[str, Any]]
     legal_context: list[dict[str, Any]] = field(default_factory=list)
+    document_context: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

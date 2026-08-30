@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from app.contracts.v1.quick_quote import QuickQuoteV1
+from decimal import Decimal
+
+from app.contracts.v1.quick_quote import EstimateLedgerV1, LedgerQuantityTotalV1, QuickQuoteV1
+from app.modules.conversation.domain.models import CustomerJobStatus
 from app.modules.conversation.infrastructure.repository import ConversationRepository
 from app.modules.quick_quote.infrastructure.repository import QuickQuoteRepository
 from app.modules.service_catalog.infrastructure.repository import ServiceCatalogRepository
@@ -22,12 +25,18 @@ class QuoteHistoryService:
         self._work_packages = work_packages
 
     def latest_for_conversation(self, conversation_id: str, locale: str) -> list[QuickQuoteV1]:
-        jobs = {job.id: job for job in self._conversations.list_jobs(conversation_id)}
+        jobs = self._conversations.list_jobs(conversation_id)
+        quotes_by_job = {
+            quote.job_id: quote
+            for quote in self._quotes.list_latest_by_conversation(conversation_id)
+        }
         results: list[QuickQuoteV1] = []
-        for stored in self._quotes.list_latest_by_conversation(conversation_id):
-            job = jobs.get(stored.job_id)
+        for job in jobs:
+            stored = quotes_by_job.get(job.id)
+            if stored is None:
+                continue
             service = self._services.get_active(stored.service_code)
-            if job is None or service is None:
+            if job.status != CustomerJobStatus.ACTIVE or service is None:
                 continue
             package = self._work_packages.get_active(stored.service_code)
             results.append(
@@ -52,3 +61,22 @@ class QuoteHistoryService:
                 )
             )
         return results
+
+    def ledger_for_conversation(self, conversation_id: str, locale: str) -> EstimateLedgerV1:
+        items = self.latest_for_conversation(conversation_id, locale)
+        quantities_by_unit: dict[str, set[Decimal]] = {}
+        for item in items:
+            if item.quantity is not None:
+                quantities_by_unit.setdefault(item.unit, set()).add(item.quantity)
+        return EstimateLedgerV1(
+            conversation_id=conversation_id,
+            items=items,
+            quantity_totals=[
+                LedgerQuantityTotalV1(unit=unit, quantity=sum(values, Decimal("0")))
+                for unit, values in quantities_by_unit.items()
+            ],
+            grand_total=sum(
+                (item.total_price for item in items if item.total_price is not None),
+                Decimal("0"),
+            ),
+        )

@@ -1,0 +1,25 @@
+version: "1.0"
+network:
+  timeout_seconds: 60
+  max_download_bytes: 41943040
+  retries: 2
+  rate_limit_seconds: 0.35
+  respect_robots_txt: true
+  max_discovered_per_source: 20
+schedule:
+  cadence: weekly
+  domains: [AFAD, CSIDB, YFK, RESMI_GAZETE, BUILDINGSMART]
+chunking:
+  target_chars: 1800
+  overlap_chars: 160
+embedding:
+  dimensions: 192
+retrieval:
+  lexical_weight: 0.62
+  vector_weight: 0.28
+  authority_weight: 0.10
+  k1: 1.2
+  b: 0.75
+rule_extraction:
+  minimum_requirement_chars: 8
+  numeric_pattern: '(?:en az|en fazla|asgari|azami|zorunlu|mecburi).{0,180}?\d+(?:[.,]\d+)?\s*(?:m|cm|mm|m2|m²|dakika|saat|kişi|adet|%)?'

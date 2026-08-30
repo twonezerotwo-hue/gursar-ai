@@ -1,0 +1,1 @@
+"""Knowledge acquisition HTTP API."""

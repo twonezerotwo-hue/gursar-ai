@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GÜRSAR AI · Pafta İnceleme</title>
+  <link rel="stylesheet" href="/static/pdf-viewer.css">
+</head>
+<body>
+  <header>
+    <strong>GÜRSAR AI</strong><span>Vektör PDF inceleme</span>
+    <nav>
+      <button id="previous">←</button><span id="page-label">1 / 1</span><button id="next">→</button>
+      <button id="zoom-out">−</button><button id="zoom-in">+</button>
+      <select id="tool"><option value="pan">Kaydır</option><option value="length">Uzunluk</option><option value="polygon">Alan</option><option value="count">Adet</option><option value="scale">Ölçek</option></select>
+      <label><input class="layer" type="checkbox" value="regions" checked> Bölgeler</label>
+      <label><input class="layer" type="checkbox" value="measurements" checked> Ölçümler</label>
+      <label><input class="layer" type="checkbox" value="vision" checked> AI önerileri</label>
+      <button id="save" disabled>Kaydet</button>
+    </nav>
+  </header>
+  <main id="viewport"><div id="canvas"><img id="page" alt="PDF paftası"><svg id="overlay"></svg></div></main>
+  <aside id="status">Pafta yükleniyor…</aside>
+  <script src="/static/pdf-viewer.js"></script>
+</body>
+</html>

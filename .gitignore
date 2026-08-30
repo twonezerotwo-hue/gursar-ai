@@ -11,4 +11,8 @@ __pycache__/
 htmlcov/
 .coverage
 dist/
+data/
+tmp/
+outputs/
+.codex_work/
 *.egg-info/

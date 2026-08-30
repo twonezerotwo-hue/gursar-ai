@@ -1,0 +1,73 @@
+completeness_weights:
+  architecture: 20
+  structural: 20
+  geotechnical: 10
+  boq: 15
+  final_quantities: 25
+  as_built: 10
+minimum_training_completeness: 60
+allowed_rights:
+  - OPEN_LICENSED
+  - INTERNAL_PROJECT
+  - LICENSED_BY_GURSAR
+active_learning:
+  low_confidence_threshold: 0.60
+  base_priority: 10
+  confidence_weight: 40
+  reason_weights:
+    LOW_CONFIDENCE: 20
+    MODEL_DISAGREEMENT: 30
+    UNKNOWN_CLASS: 35
+    RARE_CLASS: 30
+    HIGH_VALUE_ITEM: 40
+    QUANTITY_CONFLICT: 50
+    HUMAN_CORRECTION: 80
+    UNIT_CONFLICT: 60
+    SEMANTIC_MAPPING_CONFLICT: 55
+    DIMENSION_CONFLICT: 45
+    LOW_SHEET_CLASSIFICATION_CONFIDENCE: 40
+    UNKNOWN_DISCIPLINE: 45
+    UNKNOWN_DRAWING_TYPE: 40
+    SCALE_CONFLICT: 55
+    SCALE_UNKNOWN: 50
+    TITLE_BLOCK_LOW_CONFIDENCE: 35
+    SEMANTIC_ELEMENT_LOW_CONFIDENCE: 45
+dataset_split_percentages:
+  TRAIN: 80
+  VALIDATION: 10
+  TEST: 10
+vision_dataset:
+  split_ratios:
+    TRAIN: 0.70
+    VALIDATION: 0.15
+    TEST: 0.15
+  rare_class_threshold: 20
+  maximum_synthetic_ratio: 0.40
+vision_readiness:
+  sheet_classifier:
+    projects: 10
+    samples: 500
+  title_block:
+    projects: 10
+    samples: 500
+  architectural_elements:
+    projects: 20
+    sheets: 500
+    annotations: 5000
+vision_model:
+  architectural_classes:
+    - WALL
+    - DOOR
+    - WINDOW
+    - COLUMN
+    - ROOM
+    - STAIR
+  low_confidence_threshold: 0.60
+vision_benchmark_targets:
+  sheet_macro_f1: 0.95
+  title_block_map50: 0.95
+  sheet_number_exact_match: 0.98
+  scale_exact_match: 0.98
+  count_error: 0.03
+  vector_measurement_error: 0.02
+  raster_measurement_error: 0.05

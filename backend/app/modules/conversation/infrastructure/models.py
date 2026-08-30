@@ -20,6 +20,18 @@ class ConversationORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class VisitorSessionORM(Base):
+    __tablename__ = "visitor_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    owner_token_sha256: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class MessageORM(Base):
     __tablename__ = "messages"
     __table_args__ = (UniqueConstraint("conversation_id", "ordinal", name="uq_message_ordinal"),)
@@ -31,6 +43,26 @@ class MessageORM(Base):
     role: Mapped[str] = mapped_column(String(20))
     content: Mapped[str] = mapped_column(Text)
     ordinal: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ConversationTurnReceiptORM(Base):
+    __tablename__ = "conversation_turn_receipts"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id",
+            "idempotency_key",
+            name="uq_conversation_turn_receipt_key",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    request_sha256: Mapped[str] = mapped_column(String(64))
+    response_payload: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
@@ -48,6 +80,7 @@ class CustomerJobORM(Base):
     location_label: Mapped[str | None] = mapped_column(String(240))
     scope_state: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     provenance: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(20), default="PENDING", index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(

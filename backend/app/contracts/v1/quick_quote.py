@@ -37,3 +37,22 @@ class ChatTurnResponseV1(BaseModel):
     assistant_message_id: str
     assistant_text: str
     quotes: list[QuickQuoteV1] = Field(default_factory=list)
+
+
+class LedgerQuantityTotalV1(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    unit: str
+    quantity: Decimal
+
+
+class EstimateLedgerV1(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = "estimate-ledger.v1"
+    conversation_id: str
+    items: list[QuickQuoteV1] = Field(default_factory=list)
+    quantity_totals: list[LedgerQuantityTotalV1] = Field(default_factory=list)
+    grand_total: Decimal = Decimal("0")
+    currency: str = "TRY"
+    vat_policy: str = "EXCLUDED"

@@ -12,6 +12,12 @@ class MessageRole(StrEnum):
     ASSISTANT = "ASSISTANT"
 
 
+class CustomerJobStatus(StrEnum):
+    PENDING = "PENDING"
+    ACTIVE = "ACTIVE"
+    REMOVED = "REMOVED"
+
+
 @dataclass(frozen=True, slots=True)
 class Conversation:
     id: str
@@ -31,6 +37,15 @@ class Message:
 
 
 @dataclass(frozen=True, slots=True)
+class ConversationTurnReceipt:
+    conversation_id: str
+    idempotency_key: str
+    request_sha256: str
+    response_payload: dict[str, Any]
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class CustomerJob:
     id: str
     conversation_id: str
@@ -41,4 +56,5 @@ class CustomerJob:
     location_label: str | None
     scope_state: list[dict[str, Any]] = field(default_factory=list)
     provenance: list[dict[str, Any]] = field(default_factory=list)
+    status: CustomerJobStatus = CustomerJobStatus.PENDING
     version: int = 1

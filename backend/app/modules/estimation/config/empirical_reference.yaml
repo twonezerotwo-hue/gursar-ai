@@ -1,0 +1,105 @@
+profile:
+  id: TR_RC_BASELINE_v1
+  name: Turkish RC Building Empirical Baseline
+  version: "1.0"
+  flags:
+    - NOT_CODE_MINIMUM
+    - NOT_EXACT_PROJECT_QUANTITY
+
+coefficients:
+  concrete:
+    value: 0.38
+    unit: m3_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Early-stage reference; never a code minimum or exact project quantity.
+  reinforcement:
+    value: 34
+    unit: kg_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Early-stage reference; structural takeoff overrides this value.
+  formwork:
+    value: 2.60
+    unit: m2_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Early-stage reference.
+  formwork_scaffold:
+    value: 2.80
+    unit: m3_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Early-stage reference.
+  work_scaffold:
+    value: 1.43
+    unit: m2_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Early-stage reference.
+  masonry_wall:
+    value: 0.15
+    unit: m3_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Convert volume to surface only when wall thickness is known.
+  internal_plaster:
+    value: 2.40
+    unit: m2_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Use wall-face geometry when available.
+  external_plaster:
+    value: 1.30
+    unit: m2_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Use facade geometry when available.
+  ceiling_plaster:
+    value: 0.90
+    unit: m2_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Early-stage reference band is configured separately.
+  internal_paint:
+    value: 3.00
+    unit: m2_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Apply only when finish geometry is unavailable.
+  ceramic:
+    value: 0.30
+    unit: m2_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Early-stage reference.
+  floor_finish:
+    value: 0.90
+    unit: m2_per_gross_m2
+    source_class: EMPIRICAL_REFERENCE
+    source_name: Turkish RC Building Empirical Baseline
+    version: "1.0"
+    confidence: LOW
+    notes: Early-stage reference band is configured separately.

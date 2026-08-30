@@ -1,0 +1,123 @@
+version: "1.0"
+source_class: HEURISTIC_ESTIMATE
+
+defaults:
+  building_use: residential
+  floor_height_m: 3.0
+  structural_system: frame_plus_shear_wall
+  structural_intensity: NORMAL
+  average_span_m: 4.5
+  foundation_type: unknown
+  soil_condition: normal
+  seismic_demand: medium
+  basement_floors: 0
+  facade_opening_ratio: 0.25
+  basement_height_m: 3.0
+  basement_wall_thickness_m: 0.30
+
+structural_system_intensity:
+  moment_frame: LIGHT
+  frame_plus_shear_wall: NORMAL
+  shear_wall_dominant: SHEAR_WALL_HEAVY
+  flat_slab: NORMAL
+  ribbed_slab: NORMAL
+  waffle: HEAVY
+  precast: LIGHT
+  unknown: NORMAL
+
+intensity_profiles:
+  LIGHT:
+    concrete: {low: 0.32, high: 0.37}
+    reinforcement: {low: 30, high: 40}
+    formwork: {low: 2.3, high: 2.7}
+  NORMAL:
+    concrete: {low: 0.36, high: 0.44}
+    reinforcement: {low: 38, high: 52}
+    formwork: {low: 2.5, high: 3.1}
+  SHEAR_WALL_HEAVY:
+    concrete: {low: 0.40, high: 0.48}
+    reinforcement: {low: 45, high: 60}
+    formwork: {low: 2.7, high: 3.3}
+  HEAVY:
+    concrete: {low: 0.44, high: 0.55}
+    reinforcement: {low: 52, high: 70}
+    formwork: {low: 2.9, high: 3.5}
+
+span_modifiers:
+  small:
+    min_m: 0
+    max_m: 4
+    concrete: 0.95
+    reinforcement: 0.92
+    formwork: 0.95
+  normal:
+    min_m: 4
+    max_m: 5.5
+    concrete: 1.0
+    reinforcement: 1.0
+    formwork: 1.0
+  large:
+    min_m: 5.5
+    max_m: 7
+    concrete: 1.10
+    reinforcement: 1.15
+    formwork: 1.08
+  very_large:
+    min_m: 7
+    max_m: null
+    concrete: 1.0
+    reinforcement: 1.0
+    formwork: 1.0
+    confidence_penalty: 0.20
+    manual_structural_review: true
+
+floor_system_modifiers:
+  beam_slab:
+    concrete: {low: 1.0, base: 1.0, high: 1.0}
+    reinforcement: {low: 1.0, base: 1.0, high: 1.0}
+    formwork: {low: 1.0, base: 1.0, high: 1.0}
+  flat_slab:
+    concrete: {low: 1.05, base: 1.10, high: 1.15}
+    reinforcement: {low: 1.05, base: 1.12, high: 1.20}
+    formwork: {low: 0.95, base: 1.0, high: 1.05}
+  ribbed_slab:
+    concrete: {low: 0.90, base: 0.98, high: 1.05}
+    reinforcement: {low: 0.95, base: 1.02, high: 1.10}
+    formwork: {low: 1.05, base: 1.12, high: 1.20}
+  waffle:
+    concrete: {low: 0.95, base: 1.02, high: 1.10}
+    reinforcement: {low: 1.0, base: 1.08, high: 1.15}
+    formwork: {low: 1.10, base: 1.18, high: 1.25}
+
+soil_modifiers:
+  good: {concrete: 0.96, reinforcement: 0.95}
+  normal: {concrete: 1.0, reinforcement: 1.0}
+  poor: {concrete: 1.08, reinforcement: 1.10}
+  very_poor: {concrete: 1.15, reinforcement: 1.18, confidence_penalty: 0.10}
+  unknown: {concrete: 1.0, reinforcement: 1.0}
+
+seismic_modifiers:
+  low: {concrete: 0.97, reinforcement: 0.95}
+  medium: {concrete: 1.0, reinforcement: 1.0}
+  high: {concrete: 1.05, reinforcement: 1.10}
+  very_high: {concrete: 1.10, reinforcement: 1.15}
+  unknown: {concrete: 1.0, reinforcement: 1.0}
+
+basement_frame:
+  concrete: {low: 0.48, base: 0.55, high: 0.65, unit: m3}
+  reinforcement: {low: 50, base: 60, high: 75, unit: kg}
+  formwork: {low: 2.7, base: 3.1, high: 3.6, unit: m2}
+
+finish_bands:
+  ceiling: {low: 0.85, base: 0.90, high: 0.95}
+  floor_finish: {low: 0.85, base: 0.90, high: 0.95}
+
+facade_opening_ratio_defaults:
+  residential: {low: 0.20, base: 0.25, high: 0.30}
+  hotel: {low: 0.20, base: 0.25, high: 0.35}
+  office: {low: 0.30, base: 0.45, high: 0.60}
+  glazed_office: {low: 0.60, base: 0.75, high: 0.90}
+  hospital: {low: 0.20, base: 0.30, high: 0.40}
+  mall: {low: 0.20, base: 0.35, high: 0.50}
+  parking: {low: 0.05, base: 0.10, high: 0.20}
+  unknown: {low: 0.20, base: 0.25, high: 0.35}

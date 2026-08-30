@@ -23,6 +23,15 @@ class SourceType(StrEnum):
     EXTERNAL_DATA = "EXTERNAL_DATA"
 
 
+class ConversationActionV1(StrEnum):
+    ADD = "add"
+    UPDATE = "update"
+    REMOVE = "remove"
+    QUERY = "query"
+    TOTAL = "total"
+    CLARIFY = "clarify"
+
+
 class EvidenceV1(StrictContract):
     field_path: str
     value: Any
@@ -32,7 +41,7 @@ class EvidenceV1(StrictContract):
 
 
 class QuantityV1(StrictContract):
-    value: Decimal = Field(gt=0)
+    value: Decimal = Field(gt=0, le=Decimal("10000000"))
     unit: str = "m2"
 
 
@@ -46,6 +55,7 @@ class LocationV1(StrictContract):
 
 
 class JobUnderstandingV1(StrictContract):
+    action: ConversationActionV1 = ConversationActionV1.ADD
     job_reference: str | None = None
     service_candidate: str | None = None
     service_confidence: float = Field(default=0, ge=0, le=1)

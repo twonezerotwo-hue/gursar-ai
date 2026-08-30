@@ -131,9 +131,7 @@ def test_labor_price_question_returns_unit_price_without_assuming_quantity(
     client: TestClient,
     conversation_id: str,
 ) -> None:
-    reinforcement = send(client, conversation_id, "Demir işçiliğinin m² fiyatı nedir?")[
-        "quotes"
-    ][0]
+    reinforcement = send(client, conversation_id, "Demir işçiliğinin m² fiyatı nedir?")["quotes"][0]
     formwork = send(client, conversation_id, "Kalıp işçiliğinin m² fiyatı nedir?")["quotes"][0]
     masonry = send(client, conversation_id, "Duvar işçiliğinin m² fiyatı nedir?")["quotes"][0]
 
@@ -283,11 +281,26 @@ def test_labor_only_rough_construction_is_split_and_totalled(
         "formwork.labor",
         "masonry.labor",
     }
-    assert sum(Decimal(quote["total_price"]) for quote in result["quotes"]) == Decimal(
-        "140000"
-    )
+    assert sum(Decimal(quote["total_price"]) for quote in result["quotes"]) == Decimal("140000")
     assert "140.000 TL + KDV" in result["assistant_text"]
     assert "yalnız işçilik" in result["assistant_text"]
+
+
+def test_rough_construction_keeps_quantity_from_a_comma_separated_first_message(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    first = send(
+        client,
+        conversation_id,
+        "Kaba inşaat yaptırmak istiyorum, toplam 1.200 m².",
+    )
+    result = send(client, conversation_id, "Malzemesiz olacak.")
+
+    assert "Toplam metraj kaç m²" not in first["assistant_text"]
+    assert first["quotes"][0]["quantity"] == "1200"
+    assert sum(Decimal(quote["total_price"]) for quote in result["quotes"]) == Decimal("1680000")
+    assert "1.680.000 TL + KDV" in result["assistant_text"]
 
 
 def test_material_rough_construction_uses_only_configured_material_price(
@@ -302,9 +315,7 @@ def test_material_rough_construction_uses_only_configured_material_price(
         "formwork.labor_material",
         "masonry.labor",
     }
-    assert sum(Decimal(quote["total_price"]) for quote in result["quotes"]) == Decimal(
-        "162500"
-    )
+    assert sum(Decimal(quote["total_price"]) for quote in result["quotes"]) == Decimal("162500")
     assert "162.500 TL + KDV" in result["assistant_text"]
     assert "Kalıp malzemesi dahildir" in result["assistant_text"]
     assert "Demir ve duvar malzemeleri" in result["assistant_text"]
@@ -339,6 +350,26 @@ def test_fine_construction_template_waits_for_prices_without_creating_quote(
 
     assert result["quotes"] == []
     assert "fiyatları henüz tanımlanmadığı" in result["assistant_text"]
+    assert client.get(f"/api/v1/conversations/{conversation_id}/quotes").json() == []
+
+
+def test_completed_rough_construction_reporting_request_is_not_repriced(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    result = send(
+        client,
+        conversation_id,
+        (
+            "Kaba inşaat bitti. İmalatta eksikler var; ince yapının raporlanması "
+            "ve programlanması gerekiyor."
+        ),
+    )
+
+    assert result["quotes"] == []
+    assert "malzemeli mi, malzemesiz mi" not in result["assistant_text"]
+    assert "Kat ve mahal bazlı eksik/kusur listesi" in result["assistant_text"]
+    assert "hedef teslim tarihini" in result["assistant_text"]
     assert client.get(f"/api/v1/conversations/{conversation_id}/quotes").json() == []
 
 
@@ -403,6 +434,187 @@ def test_analysis_snapshots_are_appended_not_overwritten(
         assert jobs[0].version == 2
 
 
+def test_unit_price_question_stays_out_of_ledger_until_quantity_is_given(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    first = send(client, conversation_id, "Demir işçiliğinin m² fiyatı nedir?")
+
+    assert first["quotes"][0]["unit_price"] == "500.0000"
+    assert first["quotes"][0]["total_price"] is None
+    assert client.get(f"/api/v1/conversations/{conversation_id}/quotes").json() == []
+
+    send(client, conversation_id, "2000")
+    ledger = client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()
+
+    assert len(ledger) == 1
+    assert ledger[0]["service_code"] == "reinforcement.labor"
+    assert Decimal(ledger[0]["total_price"]) == Decimal("1000000")
+
+
+def test_querying_existing_item_does_not_duplicate_ledger(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    send(client, conversation_id, "2000 m2 demir işçiliği")
+    answer = send(client, conversation_id, "demir kaçtı?")
+    ledger = client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()
+
+    assert len(ledger) == 1
+    assert Decimal(ledger[0]["quantity"]) == Decimal("2000")
+    assert Decimal(ledger[0]["total_price"]) == Decimal("1000000")
+    assert "1.000.000 TL" in answer["assistant_text"]
+
+
+def test_querying_an_old_item_keeps_original_ledger_order(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    send(client, conversation_id, "2000 m2 demir işçiliği")
+    send(client, conversation_id, "1000 m2 kalıp işçiliği")
+    send(client, conversation_id, "demir kaçtı?")
+    ledger = client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()
+
+    assert [quote["service_code"] for quote in ledger] == [
+        "reinforcement.labor",
+        "formwork.labor",
+    ]
+
+
+def test_explicit_revision_updates_existing_item_instead_of_adding(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    send(client, conversation_id, "2000 m2 demir işçiliği")
+    result = send(client, conversation_id, "demiri 2500 m2 olarak güncelle")
+    ledger = client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()
+
+    assert len(ledger) == 1
+    assert result["quotes"][0]["service_code"] == "reinforcement.labor"
+    assert Decimal(ledger[0]["quantity"]) == Decimal("2500")
+    assert Decimal(ledger[0]["total_price"]) == Decimal("1250000")
+
+
+def test_remove_action_hides_only_target_item_from_ledger(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    send(client, conversation_id, "2000 m2 demir işçiliği")
+    send(client, conversation_id, "1000 m2 kalıp işçiliği")
+    removed = send(client, conversation_id, "demiri sil")
+    ledger = client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()
+
+    assert "hesap defterinden çıkarıldı" in removed["assistant_text"]
+    assert len(ledger) == 1
+    assert ledger[0]["service_code"] == "formwork.labor"
+
+
+def test_message_idempotency_replays_response_without_duplicate_state(
+    client: TestClient,
+    conversation_id: str,
+    app: FastAPI,
+) -> None:
+    headers = {"Idempotency-Key": "turn-reinforcement-0001"}
+    first = client.post(
+        f"/api/v1/conversations/{conversation_id}/messages",
+        headers=headers,
+        json={"text": "2000 m2 demir işçiliği"},
+    )
+    replay = client.post(
+        f"/api/v1/conversations/{conversation_id}/messages",
+        headers=headers,
+        json={"text": "2000 m2 demir işçiliği"},
+    )
+
+    assert first.status_code == 200
+    assert replay.status_code == 200
+    assert replay.json() == first.json()
+    assert len(client.get(f"/api/v1/conversations/{conversation_id}/quotes").json()) == 1
+    with app.state.session_factory() as session:
+        snapshots = session.scalars(
+            select(AnalysisSnapshotORM).where(
+                AnalysisSnapshotORM.conversation_id == conversation_id
+            )
+        ).all()
+        assert len(snapshots) == 1
+
+
+def test_idempotency_key_reuse_with_different_message_returns_conflict(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    headers = {"Idempotency-Key": "turn-conflict-0001"}
+    first = client.post(
+        f"/api/v1/conversations/{conversation_id}/messages",
+        headers=headers,
+        json={"text": "100 m2 kalıp işçiliği"},
+    )
+    conflict = client.post(
+        f"/api/v1/conversations/{conversation_id}/messages",
+        headers=headers,
+        json={"text": "100 m2 demir işçiliği"},
+    )
+
+    assert first.status_code == 200
+    assert conflict.status_code == 409
+    assert "farklı bir mesaj" in conflict.json()["detail"]
+    ledger = client.get(f"/api/v1/conversations/{conversation_id}/ledger").json()
+    assert [item["service_code"] for item in ledger["items"]] == ["formwork.labor"]
+
+
+def test_server_owned_ledger_returns_canonical_line_items_and_totals(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    send(client, conversation_id, "2000 m2 demir işçiliği")
+    send(client, conversation_id, "2000 m2 kalıp işçiliği")
+    send(client, conversation_id, "4000 m2 duvar işçiliği")
+
+    response = client.get(f"/api/v1/conversations/{conversation_id}/ledger")
+
+    assert response.status_code == 200
+    ledger = response.json()
+    assert ledger["schema_version"] == "estimate-ledger.v1"
+    assert [item["service_code"] for item in ledger["items"]] == [
+        "reinforcement.labor",
+        "formwork.labor",
+        "masonry.labor",
+    ]
+    assert ledger["quantity_totals"][0]["unit"] == "m2"
+    assert Decimal(ledger["quantity_totals"][0]["quantity"]) == Decimal("6000")
+    assert Decimal(ledger["grand_total"]) == Decimal("3200000")
+
+
+def test_turkish_decimal_quantity_is_calculated_deterministically(
+    client: TestClient,
+    conversation_id: str,
+) -> None:
+    quote = send(client, conversation_id, "12,5 m2 demir işçiliği")["quotes"][0]
+
+    assert Decimal(quote["quantity"]) == Decimal("12.5")
+    assert Decimal(quote["total_price"]) == Decimal("6250")
+
+
+def test_invalid_or_unsupported_quantities_never_enter_the_ledger(
+    client: TestClient,
+) -> None:
+    invalid_messages = (
+        "-5 m2 demir işçiliği",
+        "0 m2 demir işçiliği",
+        "10000001 m2 demir işçiliği",
+        "100 m3 demir işçiliği",
+    )
+
+    for message in invalid_messages:
+        created = client.post("/api/v1/conversations", json={"locale": "tr"})
+        conversation_id = created.json()["conversation_id"]
+        result = send(client, conversation_id, message)
+
+        assert result["quotes"][0]["quantity"] is None
+        assert result["quotes"][0]["total_price"] is None
+        assert client.get(f"/api/v1/conversations/{conversation_id}/ledger").json()["items"] == []
+
+
 def test_qr_entry_creates_conversation_with_source_attribution(
     client: TestClient,
     app: FastAPI,
@@ -422,7 +634,7 @@ def test_qr_entry_creates_conversation_with_source_attribution(
         assert conversation is not None
         assert conversation.qr_source_id == source.id
 
-    resumed = client.post("/api/v1/qr/CARD001/conversation")
-    assert resumed.status_code == 200
-    assert resumed.json()["conversation_id"] == payload["conversation_id"]
-    assert resumed.json()["resumed"] is True
+    isolated = client.post("/api/v1/qr/CARD001/conversation")
+    assert isolated.status_code == 200
+    assert isolated.json()["conversation_id"] != payload["conversation_id"]
+    assert isolated.json()["resumed"] is False

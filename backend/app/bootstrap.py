@@ -344,8 +344,7 @@ def _initial_work_packages() -> list[WorkPackage]:
                     "boya ve işçilik dahildir."
                 ),
                 "en": (
-                    "Standard scope includes insulation, anchors, mesh, render, "
-                    "paint, and labor."
+                    "Standard scope includes insulation, anchors, mesh, render, paint, and labor."
                 ),
             },
             items=[

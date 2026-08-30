@@ -3,6 +3,17 @@ const state = {
   busy: false,
   messages: [],
   quotes: [],
+  ledger: null,
+  projectId: null,
+  uploadedDocuments: [],
+  uploading: false,
+  documentCapabilities: {
+    accepted_extensions: [".pdf", ".png", ".jpg", ".jpeg", ".dxf", ".ifc"],
+    accepted_media_types: ["application/pdf", "image/png", "image/jpeg"],
+    max_upload_bytes: 50 * 1024 * 1024,
+    max_pdf_pages: 500,
+    encrypted_pdf_supported: false,
+  },
 };
 
 const elements = {
@@ -15,10 +26,22 @@ const elements = {
   summaryTotal: document.querySelector("#summary-total"),
   ledgerBreakdown: document.querySelector("#ledger-breakdown"),
   ledgerGrandTotal: document.querySelector("#ledger-grand-total"),
+  assistantCard: document.querySelector("#assistant-card"),
   send: document.querySelector("#send-button"),
-  talk: document.querySelector("#talk-button"),
+  reset: document.querySelector("#reset-button"),
+  report: document.querySelector("#report-button"),
+  fileInput: document.querySelector("#project-file-input"),
+  fileTrigger: document.querySelector("#file-trigger"),
+  fileSupport: document.querySelector("#file-support"),
+  uploadedFiles: document.querySelector("#uploaded-files"),
   template: document.querySelector("#message-template"),
+  portfolioLaunch: document.querySelector("#portfolio-launch"),
+  portfolioModal: document.querySelector("#portfolio-modal"),
+  portfolioClose: document.querySelector("#portfolio-close"),
 };
+
+let portfolioCloseTimer = null;
+let portfolioLastFocus = null;
 
 function qrCodeFromPath() {
   const match = window.location.pathname.match(/^\/q\/([^/]+)$/);
@@ -26,18 +49,37 @@ function qrCodeFromPath() {
 }
 
 async function api(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   const response = await fetch(path, {
     ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers,
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.detail || "Bağlantı kurulamadı.");
+    const detail = payload.detail;
+    const message = typeof detail === "string" ? detail : detail?.message;
+    throw new Error(message || "Bağlantı kurulamadı.");
   }
   return response.json();
 }
 
 async function initializeConversation() {
+  state.conversationId = null;
+  state.messages = [];
+  state.quotes = [];
+  state.ledger = null;
+  state.projectId = null;
+  state.uploadedDocuments = [];
+  state.uploading = false;
+  elements.list.innerHTML = '<div class="loading-message"><span></span> Görüşme hazırlanıyor…</div>';
+  elements.assistantCard.classList.remove("has-conversation");
+  elements.send.disabled = true;
+  elements.fileTrigger.disabled = true;
+  renderUploadedFiles();
+  renderFileSupport();
   setConnection("loading", "Bağlanıyor");
   try {
     const code = qrCodeFromPath();
@@ -49,12 +91,24 @@ async function initializeConversation() {
         });
     state.conversationId = payload.conversation_id;
     state.messages = payload.messages || [];
-    state.quotes = await api(
-      `/api/v1/conversations/${encodeURIComponent(state.conversationId)}/quotes`,
+    state.ledger = await api(
+      `/api/v1/conversations/${encodeURIComponent(state.conversationId)}/ledger`,
     );
+    state.quotes = state.ledger.items;
+    state.documentCapabilities = await api("/api/v1/documents/capabilities").catch(
+      () => state.documentCapabilities,
+    );
+    const documentTools = await api("/api/v1/document-tools").catch(() => null);
+    if (documentTools) {
+      state.documentCapabilities.accepted_extensions = documentTools.accepted_extensions;
+      state.documentCapabilities.max_upload_bytes = documentTools.max_upload_bytes;
+    }
     renderMessages();
     renderQuotes();
-    setConnection("online", "Hazır");
+    renderFileSupport();
+    setConnection("online", "Sistem Hazır");
+    elements.send.disabled = false;
+    elements.fileTrigger.disabled = false;
     elements.input.focus({ preventScroll: true });
   } catch (error) {
     setConnection("error", "Bağlantı sorunu");
@@ -82,6 +136,7 @@ function appendRichText(container, text) {
 }
 
 function renderMessages() {
+  elements.assistantCard.classList.toggle("has-conversation", state.messages.length > 1);
   elements.list.replaceChildren();
   for (const message of state.messages) {
     const fragment = elements.template.content.cloneNode(true);
@@ -97,8 +152,7 @@ function renderMessages() {
   }
   if (state.messages.length > 1) {
     requestAnimationFrame(() => {
-      elements.list.lastElementChild?.scrollIntoView({ block: "end" });
-      window.scrollBy({ top: 104, behavior: "smooth" });
+      elements.list.lastElementChild?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
   }
 }
@@ -123,58 +177,30 @@ function formatQuantity(value, unit) {
 
 function renderQuotes() {
   elements.quotes.replaceChildren();
-  const quantitiesByUnit = new Map();
-  const totalsByService = new Map();
-  let progressTotal = 0;
+  const quantityTotals = state.ledger?.quantity_totals || [];
+  const grandTotal = state.ledger?.grand_total || 0;
 
-  for (const quote of state.quotes) {
-    if (quote.quantity) {
-      const values = quantitiesByUnit.get(quote.unit) || [];
-      values.push(Number(quote.quantity));
-      quantitiesByUnit.set(quote.unit, values);
-    }
-    if (quote.total_price) progressTotal += Number(quote.total_price);
-    if (quote.total_price || quote.unit_price != null) {
-      const serviceTotal = totalsByService.get(quote.service_code) || {
-        label: quote.service_label,
-        total: 0,
-        hasTotal: false,
-        unitPrice: quote.unit_price,
-        unit: quote.unit,
-      };
-      if (quote.total_price) {
-        serviceTotal.total += Number(quote.total_price);
-        serviceTotal.hasTotal = true;
-      }
-      totalsByService.set(quote.service_code, serviceTotal);
-    }
-  }
-
-  elements.summaryQuantity.textContent = quantitiesByUnit.size
-    ? [...quantitiesByUnit.entries()]
-        .map(([unit, quantities]) => {
-          const uniqueQuantities = new Set(quantities);
-          const total = [...uniqueQuantities].reduce((sum, quantity) => sum + quantity, 0);
-          return formatQuantity(total, unit);
-        })
-        .join(" · ")
+  elements.summaryQuantity.textContent = quantityTotals.length
+    ? quantityTotals.map((total) => formatQuantity(total.quantity, total.unit)).join(" · ")
     : "—";
-  elements.summaryTotal.textContent = progressTotal ? formatMoney(progressTotal) : "—";
-  elements.ledgerGrandTotal.textContent = progressTotal ? formatMoney(progressTotal) : "—";
+  elements.summaryTotal.textContent = Number(grandTotal) ? formatMoney(grandTotal) : "—";
+  elements.ledgerGrandTotal.textContent = Number(grandTotal) ? formatMoney(grandTotal) : "—";
+  elements.report.disabled = !state.ledger?.items?.length;
   elements.ledgerBreakdown.replaceChildren();
-  if (!totalsByService.size) {
+  const ledgerItems = state.ledger?.items || [];
+  if (!ledgerItems.length) {
     const empty = document.createElement("p");
     empty.textContent = "Henüz hesaplanmış kalem yok.";
     elements.ledgerBreakdown.append(empty);
   } else {
-    for (const summary of totalsByService.values()) {
+    for (const quote of ledgerItems) {
       const row = document.createElement("div");
       const label = document.createElement("span");
       const amount = document.createElement("strong");
-      label.textContent = summary.label;
-      amount.textContent = summary.hasTotal
-        ? formatMoney(summary.total)
-        : `${formatMoney(summary.unitPrice)} / ${summary.unit === "m2" ? "m²" : summary.unit}`;
+      label.textContent = quote.service_label;
+      amount.textContent = quote.total_price
+        ? formatMoney(quote.total_price)
+        : `${formatMoney(quote.unit_price)} / ${quote.unit === "m2" ? "m²" : quote.unit}`;
       row.append(label, amount);
       elements.ledgerBreakdown.append(row);
     }
@@ -183,7 +209,7 @@ function renderQuotes() {
   if (!state.quotes.length) {
     const empty = document.createElement("div");
     empty.className = "empty-quote";
-    empty.innerHTML = "<p>Metraj ve iş kalemi yazdığınızda hesap burada görünür.</p>";
+    empty.innerHTML = '<span aria-hidden="true">＋</span><p><strong>Henüz kalem eklenmedi.</strong>Sohbet üzerinden projenizi tarif edin, kalemler otomatik olarak burada görünsün.</p>';
     elements.quotes.append(empty);
     return;
   }
@@ -250,11 +276,16 @@ async function sendMessage(text) {
   elements.input.disabled = true;
   setConnection("loading", "AI düşünüyor");
   state.messages.push({ role: "USER", content: cleanText, pending: true });
+  const requestId = crypto.randomUUID();
   renderMessages();
   try {
     const response = await api(
       `/api/v1/conversations/${encodeURIComponent(state.conversationId)}/messages`,
-      { method: "POST", body: JSON.stringify({ text: cleanText }) },
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": requestId },
+        body: JSON.stringify({ text: cleanText }),
+      },
     );
     state.messages[state.messages.length - 1].pending = false;
     state.messages.push({
@@ -262,16 +293,17 @@ async function sendMessage(text) {
       role: "ASSISTANT",
       content: response.assistant_text,
     });
-    const savedQuotes = await api(
-      `/api/v1/conversations/${encodeURIComponent(state.conversationId)}/quotes`,
+    state.ledger = await api(
+      `/api/v1/conversations/${encodeURIComponent(state.conversationId)}/ledger`,
     );
+    const savedQuotes = state.ledger.items;
     const transientQuotes = (response.quotes || []).filter(
       (quote) => !quote.quote_id && !savedQuotes.some((saved) => saved.job_id === quote.job_id),
     );
     state.quotes = [...savedQuotes, ...transientQuotes];
     renderMessages();
     renderQuotes();
-    setConnection("online", "Hazır");
+    setConnection("online", "Sistem Hazır");
   } catch (error) {
     state.messages[state.messages.length - 1].pending = false;
     renderSystemError("Şu anda yanıtı hazırlayamadım. Lütfen tekrar deneyin.");
@@ -281,6 +313,194 @@ async function sendMessage(text) {
     elements.send.disabled = false;
     elements.input.disabled = false;
     elements.input.focus();
+  }
+}
+
+function formatFileSize(bytes) {
+  const megabytes = Number(bytes) / (1024 * 1024);
+  return `${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 }).format(megabytes)} MB`;
+}
+
+function renderFileSupport(message = "", mode = "") {
+  elements.fileSupport.className = `file-support${mode ? ` is-${mode}` : ""}`;
+  if (message) {
+    elements.fileSupport.textContent = message;
+    return;
+  }
+  const capabilities = state.documentCapabilities;
+  const formats = capabilities.accepted_extensions
+    .map((extension) => extension.slice(1).toUpperCase())
+    .join(", ");
+  const encryption = capabilities.encrypted_pdf_supported ? "" : " · Şifresiz";
+  elements.fileSupport.textContent = `${formats}${encryption} · En fazla ${formatFileSize(capabilities.max_upload_bytes)} · ${capabilities.max_pdf_pages} sayfa`;
+  elements.fileInput.accept = [
+    ...capabilities.accepted_extensions,
+    ...capabilities.accepted_media_types,
+  ].join(",");
+}
+
+function renderUploadedFiles() {
+  elements.uploadedFiles.replaceChildren();
+  for (const uploadedDocument of state.uploadedDocuments) {
+    const item = document.createElement("span");
+    item.className = "uploaded-file";
+    const name = document.createElement("span");
+    const pages = document.createElement("small");
+    name.textContent = uploadedDocument.original_name;
+    pages.textContent = uploadedDocument.analysis
+      ? `${uploadedDocument.analysis.summary} · ${uploadedDocument.analysis.tools_used.join(" + ")}`
+      : `${uploadedDocument.latest_version.page_count} sayfa`;
+    item.append(name, pages);
+    elements.uploadedFiles.append(item);
+  }
+}
+
+async function ensureUploadProject() {
+  if (state.projectId) return state.projectId;
+  const project = await api("/api/v1/projects", {
+    method: "POST",
+    body: JSON.stringify({
+      name: `GÜRSAR AI Görüşmesi ${state.conversationId.slice(0, 8)}`,
+      locale: "tr",
+    }),
+  });
+  state.projectId = project.id;
+  return project.id;
+}
+
+function validateProjectFile(file) {
+  const capabilities = state.documentCapabilities;
+  const lowerName = file.name.toLocaleLowerCase("tr-TR");
+  if (!capabilities.accepted_extensions.some((extension) => lowerName.endsWith(extension))) {
+    throw new Error(`Bu dosya türü desteklenmiyor: ${capabilities.accepted_extensions.join(", ")}`);
+  }
+  if (!file.size) throw new Error("Boş dosya yüklenemez.");
+  if (file.size > capabilities.max_upload_bytes) {
+    throw new Error(`Dosya ${formatFileSize(capabilities.max_upload_bytes)} sınırını aşıyor.`);
+  }
+}
+
+async function uploadProjectFiles(files) {
+  if (!files.length || state.uploading || !state.conversationId) return;
+  state.uploading = true;
+  elements.fileTrigger.disabled = true;
+  setConnection("loading", "Dosya yükleniyor");
+  try {
+    for (const file of files) {
+      validateProjectFile(file);
+      renderFileSupport(`${file.name} yükleniyor…`);
+      const form = new FormData();
+      form.append("file", file, file.name);
+      form.append("conversation_id", state.conversationId);
+      const analysis = await api("/api/v1/document-tools/analyze", {
+        method: "POST",
+        body: form,
+      });
+      let uploaded = {
+        original_name: file.name,
+        latest_version: { page_count: analysis.metrics.page_count || 1 },
+      };
+      if (file.name.toLocaleLowerCase("tr-TR").endsWith(".pdf")) {
+        const projectId = await ensureUploadProject();
+        const storageForm = new FormData();
+        storageForm.append("file", file, file.name);
+        uploaded = await api(
+          `/api/v1/projects/${encodeURIComponent(projectId)}/documents`,
+          { method: "POST", body: storageForm },
+        );
+      }
+      uploaded.analysis = analysis;
+      state.uploadedDocuments.push(uploaded);
+      renderUploadedFiles();
+      renderFileSupport(
+        `${uploaded.original_name} analiz edildi · ${analysis.summary}`,
+        "success",
+      );
+    }
+    setConnection("online", "Sistem Hazır");
+  } catch (error) {
+    renderFileSupport(error.message, "error");
+    setConnection("error", "Dosya yüklenemedi");
+  } finally {
+    state.uploading = false;
+    elements.fileTrigger.disabled = false;
+    elements.fileInput.value = "";
+  }
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+}
+
+function downloadReport() {
+  const items = state.ledger?.items || [];
+  if (!items.length) return;
+
+  const rows = [
+    ["İş Kalemi", "Konum", "Metraj", "Birim", "Birim Fiyat", "Toplam", "KDV"],
+    ...items.map((item) => [
+      item.service_label,
+      item.location_label,
+      item.quantity ?? "",
+      item.unit,
+      item.unit_price ?? "",
+      item.total_price ?? "",
+      "Hariç",
+    ]),
+    [],
+    ["Genel Toplam", "", "", "", "", state.ledger.grand_total || 0, "KDV hariç"],
+  ];
+  const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(";")).join("\n")}`;
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `GURSAR_AI_Proje_Ozeti_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function openPortfolio({ automatic = false } = {}) {
+  if (!elements.portfolioModal.hidden) return;
+  if (portfolioCloseTimer) window.clearTimeout(portfolioCloseTimer);
+  portfolioLastFocus = automatic ? null : document.activeElement;
+  elements.portfolioModal.hidden = false;
+  elements.portfolioLaunch.setAttribute("aria-expanded", "true");
+  document.body.classList.add("portal-open");
+  requestAnimationFrame(() => {
+    elements.portfolioModal.classList.add("is-open");
+    window.setTimeout(() => elements.portfolioClose.focus({ preventScroll: true }), 420);
+  });
+  try {
+    sessionStorage.setItem("gursar-portfolio-seen", "true");
+  } catch {
+    // Portal remains fully usable when browser storage is unavailable.
+  }
+}
+
+function closePortfolio() {
+  if (elements.portfolioModal.hidden) return;
+  elements.portfolioModal.classList.remove("is-open");
+  elements.portfolioLaunch.setAttribute("aria-expanded", "false");
+  document.body.classList.remove("portal-open");
+  portfolioCloseTimer = window.setTimeout(() => {
+    elements.portfolioModal.hidden = true;
+    if (portfolioLastFocus instanceof HTMLElement) {
+      portfolioLastFocus.focus({ preventScroll: true });
+    }
+  }, 480);
+}
+
+function schedulePortfolioReveal() {
+  let alreadySeen = false;
+  try {
+    alreadySeen = sessionStorage.getItem("gursar-portfolio-seen") === "true";
+  } catch {
+    alreadySeen = false;
+  }
+  if (!alreadySeen) {
+    window.setTimeout(() => openPortfolio({ automatic: true }), 5600);
   }
 }
 
@@ -304,7 +524,36 @@ elements.input.addEventListener("keydown", (event) => {
   }
 });
 
-elements.talk.addEventListener("click", () => elements.input.focus());
+elements.reset.addEventListener("click", () => {
+  if (state.busy || state.uploading) return;
+  elements.input.value = "";
+  void initializeConversation();
+});
+
+elements.report.addEventListener("click", downloadReport);
+elements.fileTrigger.addEventListener("click", () => elements.fileInput.click());
+elements.fileInput.addEventListener("change", () => {
+  void uploadProjectFiles([...elements.fileInput.files]);
+});
+elements.portfolioLaunch.addEventListener("click", () => openPortfolio());
+elements.portfolioClose.addEventListener("click", closePortfolio);
+elements.portfolioModal.querySelectorAll("[data-portfolio-close]").forEach((button) => {
+  button.addEventListener("click", closePortfolio);
+});
+elements.portfolioModal.querySelectorAll("[data-portfolio-prompt]").forEach((button) => {
+  button.addEventListener("click", () => {
+    elements.input.value = button.dataset.portfolioPrompt;
+    closePortfolio();
+    window.setTimeout(() => {
+      elements.assistantCard.scrollIntoView({ behavior: "smooth", block: "center" });
+      elements.input.focus({ preventScroll: true });
+    }, 520);
+  });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !elements.portfolioModal.hidden) closePortfolio();
+});
 
 document.querySelectorAll("[data-prompt]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -314,3 +563,4 @@ document.querySelectorAll("[data-prompt]").forEach((button) => {
 });
 
 void initializeConversation();
+schedulePortfolioReveal();

@@ -1,0 +1,43 @@
+version: "1.0"
+source_class: HEURISTIC_ESTIMATE
+source_name: GURSAR early-stage building-use profiles
+
+profiles:
+  residential:
+    concrete: {low: 0.36, base: 0.40, high: 0.46, unit: m3}
+    reinforcement: {low: 38, base: 45, high: 55, unit: kg}
+    formwork: {low: 2.5, base: 2.8, high: 3.2, unit: m2}
+    masonry: {low: 0.12, base: 0.15, high: 0.18, unit: m3}
+  office:
+    concrete: {low: 0.38, base: 0.43, high: 0.48, unit: m3}
+    reinforcement: {low: 42, base: 50, high: 60, unit: kg}
+    formwork: {low: 2.5, base: 2.8, high: 3.2, unit: m2}
+    masonry: {low: 0.07, base: 0.09, high: 0.11, unit: m3}
+  hotel:
+    concrete: {low: 0.39, base: 0.44, high: 0.49, unit: m3}
+    reinforcement: {low: 42, base: 50, high: 60, unit: kg}
+    formwork: {low: 2.6, base: 2.9, high: 3.3, unit: m2}
+    masonry: {low: 0.17, base: 0.20, high: 0.23, unit: m3}
+  hospital:
+    concrete: {low: 0.45, base: 0.52, high: 0.60, unit: m3}
+    reinforcement: {low: 50, base: 62, high: 75, unit: kg}
+    formwork: {low: 2.8, base: 3.2, high: 3.6, unit: m2}
+    masonry: {low: 0.16, base: 0.20, high: 0.24, unit: m3}
+  mall:
+    concrete: {low: 0.42, base: 0.50, high: 0.58, unit: m3}
+    reinforcement: {low: 50, base: 62, high: 75, unit: kg}
+    formwork: {low: 2.7, base: 3.1, high: 3.5, unit: m2}
+    masonry: {low: 0.05, base: 0.075, high: 0.10, unit: m3}
+  parking:
+    concrete: {low: 0.38, base: 0.45, high: 0.52, unit: m3}
+    reinforcement: {low: 42, base: 53, high: 65, unit: kg}
+    formwork: {low: 2.5, base: 2.9, high: 3.3, unit: m2}
+    masonry: {low: 0.02, base: 0.04, high: 0.06, unit: m3}
+  dormitory:
+    inherit: residential
+  mixed_use:
+    inherit: mall
+  industrial:
+    inherit: office
+  unknown:
+    inherit: residential

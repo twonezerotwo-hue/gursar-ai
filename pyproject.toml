@@ -11,8 +11,16 @@ dependencies = [
   "alembic>=1.14,<2",
   "fastapi>=0.115,<1",
   "httpx>=0.28,<1",
+  "ezdxf>=1.4,<2",
   "pypdf>=5.9,<7",
+  "pdfplumber>=0.11.10,<0.12",
+  "ifcopenshell>=0.8.5,<0.9",
+  "onnxruntime>=1.23,<2",
+  "opencv-python>=4.13,<5",
   "pydantic>=2.10,<3",
+  "PyYAML>=6,<7",
+  "python-multipart>=0.0.20,<1",
+  "rapidocr>=3.9.2,<4",
   "sqlalchemy>=2.0,<3",
   "structlog>=24.4,<26",
   "truststore>=0.10,<1",
@@ -33,6 +41,12 @@ package-dir = {"" = "backend"}
 
 [tool.setuptools.packages.find]
 where = ["backend"]
+
+[tool.setuptools.package-data]
+"app.modules.estimation" = ["config/*.yaml"]
+"app.modules.knowledge_acquisition" = ["config/*.yaml"]
+"app.modules.training" = ["config/*.yaml"]
+"app.modules.acquisition" = ["config/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
@@ -56,3 +70,5 @@ pythonVersion = "3.12"
 typeCheckingMode = "standard"
 include = ["backend/app", "backend/tests"]
 extraPaths = ["backend"]
+venvPath = "."
+venv = ".venv"

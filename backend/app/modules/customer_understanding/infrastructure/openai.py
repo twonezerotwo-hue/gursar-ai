@@ -11,6 +11,8 @@ from app.contracts.v1.customer_understanding import (
 SYSTEM_INSTRUCTIONS = """You extract construction intake facts only.
 Return CustomerUnderstandingResultV1. Never invent or calculate a price.
 Separate multiple jobs. Preserve explicit exclusions, additions, quantities, and locations.
+Classify each job action as add, update, remove, query, total, or clarify.
+Questions about an existing quantity or price are query, not add. Explicit revisions are update.
 Do not include customer-facing prose."""
 
 

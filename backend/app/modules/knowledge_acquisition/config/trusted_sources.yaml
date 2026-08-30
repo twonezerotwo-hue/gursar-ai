@@ -1,0 +1,33 @@
+version: "1.0"
+user_agent: "GURSAR-AI-KnowledgeBot/1.0 (+controlled-official-source-indexer)"
+trusted_hosts:
+  tier_1:
+    exact:
+      - www.afad.gov.tr
+      - afad.gov.tr
+      - yfk.csb.gov.tr
+      - webdosya.csb.gov.tr
+      - meslekihizmetler.csb.gov.tr
+      - yapiisleri.csb.gov.tr
+      - www.resmigazete.gov.tr
+      - resmigazete.gov.tr
+      - standards.buildingsmart.org
+      - www.tse.org.tr
+    suffixes:
+      - .gov.tr
+  tier_2:
+    suffixes:
+      - .edu.tr
+      - .imo.org.tr
+blacklisted_hosts: []
+quality_scores:
+  official_government: 100
+  official_standard_body: 100
+  university: 90
+  professional_chamber: 90
+  peer_reviewed_paper: 85
+  manufacturer_datasheet: 75
+  industry_report: 65
+  blog: 30
+  forum: 10
+
