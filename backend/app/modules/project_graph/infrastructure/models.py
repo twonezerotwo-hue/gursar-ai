@@ -197,6 +197,7 @@ class ElementRelationshipORM(Base):
     relationship_type: Mapped[str] = mapped_column(String(40), index=True)
     confidence: Mapped[Decimal] = mapped_column(Numeric(5, 4))
     source_type: Mapped[str] = mapped_column(String(40))
+    properties_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 

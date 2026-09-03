@@ -1,0 +1,12 @@
+version: "1.0"
+analysis_version: "ARCHITECTURAL_SPATIAL_GRAPH_V1"
+thresholds:
+  maximum_circulation_ratio: 0.25
+  maximum_core_ratio: 0.20
+checks:
+  unreachable_spaces: true
+  private_public_direct_connection: true
+  wet_space_core_connection: true
+  daylight_readiness: true
+  accessibility_readiness: true
+  dead_end_circulation: true

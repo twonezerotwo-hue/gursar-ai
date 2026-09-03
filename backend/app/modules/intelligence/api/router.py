@@ -1,15 +1,30 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import NoReturn
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_session
 from app.core.security import require_admin_key
 from app.modules.architecture_intelligence.application.service import ArchitectureAnalyzer
-from app.modules.architecture_intelligence.domain.models import ArchitectureInput
+from app.modules.architecture_intelligence.application.spatial import (
+    ArchitectureSpatialGraphService,
+    SpatialGraphError,
+)
+from app.modules.architecture_intelligence.domain.models import (
+    ArchitecturalSpace,
+    ArchitecturalZone,
+    ArchitectureInput,
+    ConnectionType,
+    PrivacyLevel,
+    SpaceKind,
+    SpatialConnection,
+    SpatialGraphAnalysis,
+    SpatialGraphInput,
+)
 from app.modules.planning.application.service import ConstructionSchedulingService
 from app.modules.planning.domain.models import PlanningPriority, PlanningRequest
 from app.modules.planning.infrastructure.repository import ProductivityRepository
@@ -48,6 +63,52 @@ class ScheduleRequest(BaseModel):
     available_crew: int | None = Field(default=None, gt=0)
 
 
+class ArchitecturalSpaceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=160)
+    name: str = Field(min_length=1, max_length=300)
+    function: str = Field(min_length=1, max_length=200)
+    kind: SpaceKind = SpaceKind.ROOM
+    privacy: PrivacyLevel = PrivacyLevel.SEMI_PRIVATE
+    boundary_m: list[tuple[float, float]] = Field(min_length=3, max_length=5_000)
+    wet_area: bool = False
+    daylight_required: bool = False
+    has_exterior_opening: bool = False
+    accessible_required: bool = False
+    accessible: bool = True
+
+
+class SpatialConnectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_key: str = Field(min_length=1, max_length=160)
+    target_key: str = Field(min_length=1, max_length=160)
+    connection_type: ConnectionType = ConnectionType.ADJACENT
+    accessible: bool = True
+
+
+class ArchitecturalZoneRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=160)
+    name: str = Field(min_length=1, max_length=300)
+    zone_type: str = Field(min_length=1, max_length=50)
+    member_space_keys: list[str] = Field(min_length=1)
+
+
+class SpatialGraphRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    gross_area_m2: Decimal = Field(gt=0)
+    building_id: str | None = None
+    level_id: str | None = None
+    reviewer: str = Field(default="SYSTEM_ARCHITECTURE_ADMIN", min_length=1, max_length=200)
+    spaces: list[ArchitecturalSpaceRequest] = Field(min_length=1, max_length=5_000)
+    connections: list[SpatialConnectionRequest] = Field(default_factory=list, max_length=20_000)
+    zones: list[ArchitecturalZoneRequest] = Field(default_factory=list, max_length=1_000)
+
+
 @router.post("/architecture/analyze")
 def analyze_architecture(payload: ArchitectureAnalysisRequest) -> dict:
     result = ArchitectureAnalyzer().analyze(ArchitectureInput(**payload.model_dump()))
@@ -71,6 +132,98 @@ def analyze_architecture(payload: ArchitectureAnalysisRequest) -> dict:
             for issue in result.issues
         ],
         "assumptions": list(result.assumptions),
+    }
+
+
+@router.post(
+    "/projects/{project_id}/architecture/spatial-graph",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_spatial_graph(
+    project_id: str,
+    payload: SpatialGraphRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    data = SpatialGraphInput(
+        project_id=project_id,
+        gross_area_m2=payload.gross_area_m2,
+        building_id=payload.building_id,
+        level_id=payload.level_id,
+        reviewer=payload.reviewer,
+        spaces=tuple(
+            ArchitecturalSpace(
+                **space.model_dump(exclude={"boundary_m"}),
+                boundary_m=tuple(space.boundary_m),
+            )
+            for space in payload.spaces
+        ),
+        connections=tuple(SpatialConnection(**item.model_dump()) for item in payload.connections),
+        zones=tuple(
+            ArchitecturalZone(
+                **zone.model_dump(exclude={"member_space_keys"}),
+                member_space_keys=tuple(zone.member_space_keys),
+            )
+            for zone in payload.zones
+        ),
+    )
+    try:
+        result = ArchitectureSpatialGraphService(session).build_and_analyze(data)
+    except SpatialGraphError as exc:
+        _raise_spatial_error(exc)
+    return _spatial_response(result)
+
+
+@router.get("/projects/{project_id}/architecture/spatial-graph")
+def get_spatial_graph(
+    project_id: str,
+    session: Session = Depends(get_session),
+) -> dict:
+    try:
+        result = ArchitectureSpatialGraphService(session).latest(project_id)
+    except SpatialGraphError as exc:
+        _raise_spatial_error(exc)
+    return _spatial_response(result)
+
+
+def _raise_spatial_error(exc: SpatialGraphError) -> NoReturn:
+    code = str(exc)
+    if code in {"PROJECT_NOT_FOUND", "SPATIAL_GRAPH_NOT_FOUND"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code) from exc
+    if code == "SPATIAL_GRAPH_REVISION_REQUIRED":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=code) from exc
+    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=code) from exc
+
+
+def _spatial_response(result: SpatialGraphAnalysis) -> dict:
+    return {
+        "analysis_id": result.analysis_id,
+        "project_id": result.project_id,
+        "analysis_version": result.analysis_version,
+        "input_checksum": result.input_checksum,
+        "reused": result.reused,
+        "metrics": [
+            {
+                "code": item.code,
+                "value": item.value,
+                "unit": item.unit,
+                "source": item.source,
+            }
+            for item in result.metrics
+        ],
+        "issues": [
+            {
+                "code": item.code,
+                "severity": item.severity,
+                "message": item.message,
+                "evidence_element_ids": list(item.evidence_element_ids),
+                "evidence_relationship_ids": list(item.evidence_relationship_ids),
+            }
+            for item in result.issues
+        ],
+        "assumptions": list(result.assumptions),
+        "spaces": list(result.spaces),
+        "zones": list(result.zones),
+        "connections": list(result.connections),
     }
 
 

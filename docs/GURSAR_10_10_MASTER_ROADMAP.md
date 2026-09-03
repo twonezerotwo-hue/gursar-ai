@@ -1,11 +1,11 @@
 # GÜRSAR AI — Global Construction Intelligence Roadmap
 
-Current phase base commit: `dc1a2f3`
+Current phase base commit: `b03ecb5`
 
-Current phase: `PHASE 2A — Construction Knowledge Brain Applicability`
+Current phase: `PHASE 3A — Architectural Spatial Graph`
 
-Current overall simple score: `5.15 / 10`
-Weighted product-readiness score: `4.90 / 10`
+Current overall simple score: `5.22 / 10`
+Weighted product-readiness score: `5.00 / 10`
 
 Status values: `NOT_STARTED`, `FOUNDATION`, `FUNCTIONAL`, `VALIDATED`,
 `BLOCKED_BY_REAL_DATA`, `PRODUCTION_READY`. No area is production-ready without measured,
@@ -15,8 +15,8 @@ auditable, security-tested, documented, realistic-data evidence.
 
 | Category | Before | After | /10 target | Status | Evidence | Main remaining gap |
 |---|---:|---:|---:|---|---|---|
-| Backend / Domain Architecture | 7.5 | 7.5 | 10 | VALIDATED | Modular monolith, migrations, 231 tests | Distributed production validation |
-| Data Governance | 7.5 | 7.7 | 10 | VALIDATED | Version, rights, lineage, applicability evidence | Retention and tenant policy |
+| Backend / Domain Architecture | 7.5 | 7.6 | 10 | VALIDATED | Shared ProjectGraph, idempotent spatial service, migration, 238 tests | Distributed production validation |
+| Data Governance | 7.7 | 7.8 | 10 | VALIDATED | Immutable analysis snapshot, audit, evidence IDs, existing rights/lineage | Retention and tenant policy |
 | Security | 7.5 | 7.5 | 10 | VALIDATED | Ownership, RBAC, upload/license gates | Full threat model and penetration test |
 | RAG / Knowledge Infrastructure | 7.2 | 7.8 | 10 | VALIDATED | 17,379 chunks, bounded FTS/vector retrieval, hierarchy | pgvector production benchmark |
 | Construction Knowledge | 5.5 | 6.8 | 10 | FUNCTIONAL | Rule applicability, 17 domain routes, conflict/UNVERIFIED | Expert-validated multi-domain rule coverage |
@@ -27,7 +27,7 @@ auditable, security-tested, documented, realistic-data evidence.
 | Vision Model Intelligence | 2.5 | 2.5 | 10 | BLOCKED_BY_REAL_DATA | Training readiness gate prevents fake model | Verified real dataset and trained model |
 | Quantity Intelligence | 6.8 | 6.8 | 10 | FUNCTIONAL | Deterministic evidence/source priority | Full BOQ rules and real tender validation |
 | Cost Intelligence | 5.5 | 5.5 | 10 | FUNCTIONAL | Versioned prices and deterministic totals | Supplier/date/scenario/actual-cost depth |
-| Architecture Intelligence | 4.8 | 4.8 | 10 | FUNCTIONAL | Baseline metrics and QA | Spatial graph, adjacency and real review |
+| Architecture Intelligence | 4.8 | 6.2 | 10 | FUNCTIONAL | Space/zone graph, adjacency, backend area, deterministic evidence-linked QA | Real drawing extraction, regulation packs and expert benchmark |
 | Structural Engineering | 4.0 | 4.0 | 10 | FOUNDATION | IFC structural elements and estimates | Load path, rebar parser, solver interfaces |
 | MEP Intelligence | 2.0 | 2.0 | 10 | FOUNDATION | Shared taxonomy and MEP knowledge route | Discipline graphs and verified takeoff |
 | Scheduling / Planning | 5.8 | 5.8 | 10 | FUNCTIONAL | WBS, CPM, productivity and crew plan | Resource leveling and actual calibration |
@@ -39,7 +39,7 @@ auditable, security-tested, documented, realistic-data evidence.
 | Customer UX / Conversation | 6.2 | 6.3 | 10 | FUNCTIONAL | Persistent context, quick replies, rule API | Automatic safe tool invocation and golden journeys |
 | Continuous Learning | 6.0 | 6.0 | 10 | FUNCTIONAL | Review, active learning, versioned datasets | Actual site/cost/productivity feedback |
 | Production / SaaS | 4.5 | 4.5 | 10 | FOUNDATION | PostgreSQL compatibility, jobs, backup | Tenancy, observability, deployment hardening |
-| Global Product Readiness | 4.5 | 4.7 | 10 | FOUNDATION | Integrated deterministic subsystems | Global real-project end-to-end validation |
+| Global Product Readiness | 4.7 | 4.9 | 10 | FOUNDATION | Integrated deterministic subsystems plus architectural spatial graph | Global real-project end-to-end validation |
 
 ## Completed phases
 
@@ -47,6 +47,9 @@ auditable, security-tested, documented, realistic-data evidence.
 2. Phase 2A Knowledge Brain: configurable source hierarchy, expanded domain routing,
    jurisdiction/date/building-type applicability, conflict surfacing, `UNVERIFIED`, and
    traceable evidence/checksum API.
+3. Phase 3A Architectural Spatial Graph: shared ProjectGraph spaces and relationships,
+   zones, deterministic area calculation, adjacency/access/privacy/daylight/wet-core QA,
+   immutable analysis snapshots, audit evidence and admin API.
 
 ## Blocked areas
 
@@ -59,6 +62,10 @@ auditable, security-tested, documented, realistic-data evidence.
 
 - Knowledge applicability is not yet automatically invoked from every conversation path.
 - Rule exception/dependency graphs and municipality inheritance are not modeled.
+- Architectural graph changes require the existing review/revision workflow to be exposed as a
+  dedicated program-editing UX; the analysis service correctly refuses silent mutation.
+- Architectural regulation checks and drawing-derived spaces still require licensed real data and
+  architect-reviewed golden cases.
 - Resource leveling and project actuals are incomplete.
 - Synthetic vision data has high duplicate-image concentration.
 - Starlette TestClient emits one upstream deprecation warning.
@@ -72,21 +79,23 @@ auditable, security-tested, documented, realistic-data evidence.
 
 ## Last validation
 
-- Tests: `231/231` expected for this phase checkpoint
+- Tests: `238/238` passed for this phase checkpoint
 - Knowledge chunks protected: `17,379`
-- Latest migration before this phase: `0019`
-- This phase adds no schema migration
-- Benchmark: deterministic knowledge applicability tests; global expert benchmark pending
+- Latest migration: `0020`
+- Migration backup: restore-validated SQLite backup before upgrade; post-upgrade integrity `ok`
+- Benchmark: 250 spaces and 249 connections in 338.78 ms; idempotent reuse in 8.48 ms
+- Real-data benchmark: pending licensed architectural programs and expert review
 
 ## Next highest priority phase
 
-`PHASE 3A — Architectural Spatial Graph`
+`PHASE 4A — Structural Graph and Load-Path Foundation`
 
-Deliver a reusable Building/Level/Space/Zone/Circulation/Core graph, adjacency and wet-zone
-checks, deterministic architecture QA, evidence references, and residential golden tests.
+Deliver reusable support/load relationships on the shared ProjectGraph, deterministic load-path
+continuity checks, structural issue evidence and engineer-reviewed golden tests without performing
+automatic structural design.
 
 ## Next actions
 
-1. Complete the full regression/security/integrity gate for Phase 2A.
-2. Commit and push the clean Phase 2A checkpoint.
-3. Start Phase 3A from the graph model only after the checkpoint is green.
+1. Commit and push the green Phase 3A checkpoint.
+2. Define structural load/support relationships on existing BuildingElements.
+3. Add deterministic continuity checks before any solver or reinforcement design integration.

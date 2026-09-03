@@ -18,6 +18,11 @@ from app.modules.acquisition.infrastructure.models import (
     SyntheticProjectORM,
     UpstreamLicenseLineageORM,
 )
+from app.modules.architecture_intelligence.infrastructure.models import (
+    ArchitecturalZoneMembershipORM,
+    ArchitecturalZoneORM,
+    ArchitectureAnalysisRunORM,
+)
 from app.modules.conversation.infrastructure.models import (
     ConversationORM,
     ConversationTurnReceiptORM,
@@ -108,6 +113,9 @@ __all__ = [
     "AnalysisJobORM",
     "AnalysisSnapshotORM",
     "AnonymizedDerivativeORM",
+    "ArchitecturalZoneMembershipORM",
+    "ArchitecturalZoneORM",
+    "ArchitectureAnalysisRunORM",
     "AuditEventORM",
     "BlockSemanticMappingORM",
     "BuildingElementORM",
