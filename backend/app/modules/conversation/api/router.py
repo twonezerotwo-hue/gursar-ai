@@ -19,6 +19,7 @@ from app.modules.conversation.api.schemas import (
 )
 from app.modules.conversation.domain.models import MessageRole
 from app.modules.conversation.infrastructure.repository import ConversationRepository
+from app.modules.conversation_intelligence.infrastructure.repository import ProjectContextRepository
 from app.modules.quick_quote.application.service import ConversationNotFoundError
 
 router = APIRouter(prefix="/api/v1/conversations", tags=["conversations"])
@@ -121,6 +122,31 @@ def get_estimate_ledger(
         conversation_id,
         conversation.locale,
     )
+
+
+@router.get("/{conversation_id}/project-context")
+def get_project_context(
+    conversation_id: str,
+    _owner: None = Depends(require_conversation_owner),
+    session: Session = Depends(get_session),
+) -> dict:
+    if ConversationRepository(session).get(conversation_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Görüşme bulunamadı.")
+    context = ProjectContextRepository(session).get(conversation_id)
+    return {
+        "conversation_id": context.conversation_id,
+        "project_type": context.project_type,
+        "footprint_m2": context.footprint_m2,
+        "gross_area_m2": context.gross_area_m2,
+        "floor_count": context.floor_count,
+        "structural_system": context.structural_system,
+        "stage": context.stage,
+        "location": context.location,
+        "goal": context.goal,
+        "available_crew": context.available_crew,
+        "facts": context.facts,
+        "version": context.version,
+    }
 
 
 @router.post("/{conversation_id}/messages", response_model=ChatTurnResponseV1)

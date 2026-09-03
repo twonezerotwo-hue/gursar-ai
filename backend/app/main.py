@@ -36,6 +36,7 @@ from app.modules.document_intelligence.infrastructure.analyzers import build_def
 from app.modules.documents.api.router import router as document_router
 from app.modules.documents.infrastructure.storage import LocalDocumentStorage
 from app.modules.estimation.api.router import router as estimation_router
+from app.modules.intelligence.api.router import router as intelligence_router
 from app.modules.jobs.api.router import project_analysis_router
 from app.modules.jobs.api.router import router as jobs_router
 from app.modules.knowledge_acquisition.api.router import router as knowledge_router
@@ -135,6 +136,7 @@ def create_app(*, settings: Settings | None = None, engine: Engine | None = None
     application.include_router(project_analysis_router)
     application.include_router(vision_router)
     application.include_router(acquisition_router)
+    application.include_router(intelligence_router)
 
     @application.get("/api/health", tags=["system"])
     def health() -> dict[str, str]:

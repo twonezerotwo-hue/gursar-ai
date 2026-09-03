@@ -78,7 +78,13 @@ def _providers(payload: DiscoveryRequest) -> list:
     rules = load_acquisition_rules()
     providers: list = [StaticSeedSourceProvider(rules["seed_sources"])]
     if payload.use_remote_providers:
-        providers.extend([GitHubDiscoveryProvider(), HuggingFaceDiscoveryProvider()])
+        interval = float(rules.get("provider_minimum_request_interval_seconds", 1))
+        providers.extend(
+            [
+                GitHubDiscoveryProvider(minimum_request_interval=interval),
+                HuggingFaceDiscoveryProvider(minimum_request_interval=interval),
+            ]
+        )
     return providers
 
 
@@ -92,7 +98,13 @@ def _bootstrap_providers(payload: DiscoveryRequest) -> list:
         )
     ]
     if payload.use_remote_providers:
-        providers.extend([GitHubDiscoveryProvider(), HuggingFaceDiscoveryProvider()])
+        interval = float(rules.get("provider_minimum_request_interval_seconds", 1))
+        providers.extend(
+            [
+                GitHubDiscoveryProvider(minimum_request_interval=interval),
+                HuggingFaceDiscoveryProvider(minimum_request_interval=interval),
+            ]
+        )
     return providers
 
 
@@ -402,6 +414,7 @@ def download_source(
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
     settings = request.app.state.settings
+    rules = load_acquisition_rules()
     try:
         row, result = DatasetDownloadManager(
             session,
@@ -410,6 +423,8 @@ def download_source(
             max_archive_files=settings.acquisition_max_archive_file_count,
             max_total_bytes=settings.acquisition_max_total_download_bytes,
             allowed_domains=set(settings.acquisition_allowed_domains),
+            blocked_domains=set(rules.get("blocked_domains", [])),
+            max_archive_path_depth=int(rules.get("max_archive_path_depth", 20)),
             timeout=settings.acquisition_download_timeout_seconds,
             max_storage_bytes=int(settings.acquisition_max_storage_gb * 1024**3),
         ).download(source_id, dry_run=payload.dry_run)
@@ -484,6 +499,20 @@ def real_data_status(session: Session = Depends(get_session)) -> dict[str, objec
 
 @router.get("/acquisition/status")
 def status_summary(session: Session = Depends(get_session)) -> dict[str, object]:
+    return {
+        **acquisition_status_summary(session),
+        "readiness": DatasetReadinessEngine(
+            session, load_acquisition_rules()["readiness"]
+        ).evaluate(),
+    }
+
+
+@router.get("/acquisition/dashboard")
+def admin_dashboard(
+    _principal: ReviewPrincipal = Depends(require_review_permission),
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    """Administrative acquisition overview with governed readiness metrics."""
     return {
         **acquisition_status_summary(session),
         "readiness": DatasetReadinessEngine(

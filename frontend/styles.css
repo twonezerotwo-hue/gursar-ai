@@ -184,6 +184,10 @@ svg { display: block; fill: none; stroke: currentColor; stroke-linecap: round; s
 .assistant-card.has-conversation .hero-copy h1 { font-size: 19px; }
 .assistant-card.has-conversation .hero-copy p { display: none; }
 .assistant-card.has-conversation .message-list { display: flex; }
+.conversation-quick-replies { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 clamp(18px, 3vw, 34px) 14px; }
+.conversation-quick-replies[hidden] { display: none; }
+.conversation-quick-replies button { padding: 8px 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: rgb(203 162 92 / 8%); color: var(--gold-pale); cursor: pointer; }
+.conversation-quick-replies button:hover { background: rgb(203 162 92 / 16%); }
 .loading-message { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 10px; }
 .loading-message span { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); animation: pulse 1.4s ease-in-out infinite; }
 .message { display: grid; max-width: min(82%, 700px); gap: 6px; }

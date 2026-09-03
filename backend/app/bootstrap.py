@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.database import Base
 from app.core.persistence import new_id
 from app.infrastructure import model_registry as _model_registry  # noqa: F401
+from app.modules.planning.application.service import ConstructionSchedulingService
+from app.modules.planning.infrastructure.repository import ProductivityRepository
 from app.modules.pricing.domain.models import NewPriceVersion
 from app.modules.pricing.infrastructure.repository import PriceBookRepository
 from app.modules.qr.infrastructure.repository import QRSourceRepository
@@ -66,6 +68,10 @@ def seed_reference_data(session: Session) -> None:
     packages = WorkPackageRepository(session)
     for package in _initial_work_packages():
         packages.add_if_missing(package)
+
+    productivity = ProductivityRepository(session)
+    for record in ConstructionSchedulingService.PRODUCTIVITY.values():
+        productivity.add_if_missing(record)
 
     prices = PriceBookRepository(session)
     _seed_price(

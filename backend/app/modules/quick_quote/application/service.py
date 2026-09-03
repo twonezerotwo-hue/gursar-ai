@@ -27,6 +27,9 @@ from app.modules.construction_chat.domain.ports import (
 )
 from app.modules.conversation.domain.models import CustomerJob, MessageRole
 from app.modules.conversation.infrastructure.repository import ConversationRepository
+from app.modules.conversation_intelligence.application.service import StructuredIntentRouter
+from app.modules.conversation_intelligence.domain.models import ConstructionIntent, ProjectContext
+from app.modules.conversation_intelligence.infrastructure.repository import ProjectContextRepository
 from app.modules.customer_understanding.application.service import CustomerUnderstandingService
 from app.modules.customer_understanding.infrastructure.location import fold_text
 from app.modules.document_intelligence.domain.ports import DocumentAnalysisRepository
@@ -38,6 +41,9 @@ from app.modules.estimation.application.chat import (
 )
 from app.modules.estimation.application.service import EstimationService
 from app.modules.legal_knowledge.domain.ports import LegalKnowledgeSearch
+from app.modules.planning.application.service import ConstructionSchedulingService
+from app.modules.planning.domain.models import PlanningPriority, PlanningRequest, ScheduleResult
+from app.modules.planning.infrastructure.repository import ProductivityRepository
 from app.modules.pricing.application.service import PriceResolver
 from app.modules.pricing.domain.location import LocationNormalizer
 from app.modules.quick_quote.application.presentation import (
@@ -135,6 +141,10 @@ class QuickQuoteService:
         self._legal_knowledge = legal_knowledge
         self._document_analyses = document_analyses
         self._estimation = estimation
+        self._intent_router = StructuredIntentRouter()
+        self._project_contexts = ProjectContextRepository(session)
+        productivity = ProductivityRepository(session).active_catalog()
+        self._scheduling = ConstructionSchedulingService(productivity=productivity or None)
 
     def handle_customer_message(
         self,
@@ -151,6 +161,33 @@ class QuickQuoteService:
             role=MessageRole.USER,
             content=text,
         )
+        current_project_context = self._project_contexts.get(conversation_id)
+        routed_turn = self._intent_router.route(text, current_project_context)
+        project_context = self._project_contexts.merge(conversation_id, routed_turn.updates)
+
+        def enriched(response: ChatTurnResponseV1) -> ChatTurnResponseV1:
+            return response.model_copy(
+                update={
+                    "intent": routed_turn.intent.value,
+                    "confidence": routed_turn.confidence,
+                    "assumptions": list(routed_turn.assumptions),
+                }
+            )
+
+        if routed_turn.intent in {
+            ConstructionIntent.SITE_SCHEDULE,
+            ConstructionIntent.CREW_PLANNING,
+        } or (
+            project_context.goal == "site_schedule" and self._planning_priority(text) is not None
+        ):
+            return self._handle_planning_request(
+                conversation_id=conversation_id,
+                text=text,
+                context=project_context,
+                routed_intent=routed_turn.intent,
+                confidence=routed_turn.confidence,
+                inherited_assumptions=routed_turn.assumptions,
+            )
         existing_jobs = self._conversations.list_jobs(conversation_id)
         estimation_input = parse_building_estimation_request(text)
         history = self._conversations.list_messages(conversation_id)
@@ -177,11 +214,14 @@ class QuickQuoteService:
                 aggregate_id=conversation_id,
                 payload={"request_id": estimation.request_id},
             )
-            return ChatTurnResponseV1(
-                conversation_id=conversation_id,
-                assistant_message_id=assistant_message.id,
-                assistant_text=customer_text,
-                quotes=[],
+            return enriched(
+                ChatTurnResponseV1(
+                    conversation_id=conversation_id,
+                    assistant_message_id=assistant_message.id,
+                    assistant_text=customer_text,
+                    quotes=[],
+                    tools_used=["ESTIMATION_ENGINE"],
+                )
             )
         if is_building_estimation_intent(text) or estimation_intake_active:
             customer_text = render_estimation_intake(estimation_context)
@@ -190,34 +230,44 @@ class QuickQuoteService:
                 role=MessageRole.ASSISTANT,
                 content=customer_text,
             )
-            return ChatTurnResponseV1(
-                conversation_id=conversation_id,
-                assistant_message_id=assistant_message.id,
-                assistant_text=customer_text,
-                quotes=[],
+            return enriched(
+                ChatTurnResponseV1(
+                    conversation_id=conversation_id,
+                    assistant_message_id=assistant_message.id,
+                    assistant_text=customer_text,
+                    quotes=[],
+                )
             )
         if self._is_project_reporting_or_scheduling_turn(text):
-            return self._answer_construction_question(
-                conversation_id=conversation_id,
-                locale=conversation.locale,
+            return enriched(
+                self._answer_construction_question(
+                    conversation_id=conversation_id,
+                    locale=conversation.locale,
+                )
             )
         if self._is_rough_construction_turn(text, existing_jobs):
-            return self._handle_rough_construction(
-                conversation_id=conversation_id,
-                locale=conversation.locale,
-                message_id=message.id,
-                text=text,
-                existing_jobs=existing_jobs,
+            return enriched(
+                self._handle_rough_construction(
+                    conversation_id=conversation_id,
+                    locale=conversation.locale,
+                    message_id=message.id,
+                    text=text,
+                    existing_jobs=existing_jobs,
+                )
             )
         if self._is_fine_construction_turn(text):
-            return self._handle_fine_construction(
-                conversation_id=conversation_id,
-                locale=conversation.locale,
+            return enriched(
+                self._handle_fine_construction(
+                    conversation_id=conversation_id,
+                    locale=conversation.locale,
+                )
             )
         if self._is_total_summary_request(text):
-            return self._handle_total_summary(
-                conversation_id=conversation_id,
-                locale=conversation.locale,
+            return enriched(
+                self._handle_total_summary(
+                    conversation_id=conversation_id,
+                    locale=conversation.locale,
+                )
             )
 
         chat_classification = (
@@ -230,14 +280,18 @@ class QuickQuoteService:
         )
         if chat_classification is not None:
             if not chat_classification.in_scope:
-                return self._save_scope_refusal(
-                    conversation_id=conversation_id,
-                    locale=conversation.locale,
+                return enriched(
+                    self._save_scope_refusal(
+                        conversation_id=conversation_id,
+                        locale=conversation.locale,
+                    )
                 )
             if not chat_classification.quote_intent:
-                return self._answer_construction_question(
-                    conversation_id=conversation_id,
-                    locale=conversation.locale,
+                return enriched(
+                    self._answer_construction_question(
+                        conversation_id=conversation_id,
+                        locale=conversation.locale,
+                    )
                 )
         context = CustomerUnderstandingContextV1(
             conversation_id=conversation_id,
@@ -259,21 +313,27 @@ class QuickQuoteService:
         if len(understanding.jobs) == 1:
             understood = understanding.jobs[0]
             if understood.action == ConversationActionV1.TOTAL:
-                return self._handle_total_summary(
-                    conversation_id=conversation_id,
-                    locale=understanding.detected_language or conversation.locale,
+                return enriched(
+                    self._handle_total_summary(
+                        conversation_id=conversation_id,
+                        locale=understanding.detected_language or conversation.locale,
+                    )
                 )
             if understood.action == ConversationActionV1.REMOVE:
-                return self._handle_remove_job(
-                    conversation_id=conversation_id,
-                    locale=understanding.detected_language or conversation.locale,
-                    understood=understood,
-                    existing_jobs=existing_jobs,
+                return enriched(
+                    self._handle_remove_job(
+                        conversation_id=conversation_id,
+                        locale=understanding.detected_language or conversation.locale,
+                        understood=understood,
+                        existing_jobs=existing_jobs,
+                    )
                 )
             if self._needs_job_clarification(understood):
-                return self._handle_job_clarification(
-                    conversation_id=conversation_id,
-                    locale=understanding.detected_language or conversation.locale,
+                return enriched(
+                    self._handle_job_clarification(
+                        conversation_id=conversation_id,
+                        locale=understanding.detected_language or conversation.locale,
+                    )
                 )
 
         quick_quotes = [
@@ -316,6 +376,172 @@ class QuickQuoteService:
             assistant_message_id=assistant_message.id,
             assistant_text=customer_text,
             quotes=quick_quotes,
+            intent=routed_turn.intent.value,
+            confidence=routed_turn.confidence,
+            assumptions=list(routed_turn.assumptions),
+        )
+
+    def _handle_planning_request(
+        self,
+        *,
+        conversation_id: str,
+        text: str,
+        context: ProjectContext,
+        routed_intent: ConstructionIntent,
+        confidence: float,
+        inherited_assumptions: tuple[str, ...],
+    ) -> ChatTurnResponseV1:
+        missing = []
+        if context.footprint_m2 is None and context.gross_area_m2 is None:
+            missing.append("oturum veya toplam inşaat alanı")
+        if context.floor_count is None:
+            missing.append("kat sayısı")
+        if missing:
+            question = f"Programı hazırlayabilirim. Önce {missing[0]} nedir?"
+            assistant = self._conversations.add_message(
+                conversation_id=conversation_id,
+                role=MessageRole.ASSISTANT,
+                content=question,
+            )
+            return ChatTurnResponseV1(
+                conversation_id=conversation_id,
+                assistant_message_id=assistant.id,
+                assistant_text=question,
+                intent=ConstructionIntent.SITE_SCHEDULE.value,
+                confidence=confidence,
+                quick_replies=[],
+                assumptions=list(inherited_assumptions),
+            )
+
+        assert context.floor_count is not None
+        gross_area = context.gross_area_m2 or (
+            (context.footprint_m2 or Decimal("0")) * Decimal(context.floor_count)
+        )
+        priority = self._planning_priority(text)
+        if priority is None and context.facts.get("crew_planning_delegated") is True:
+            priority = PlanningPriority.BALANCED
+        if priority is None:
+            question = "Tamam, proje bağlamını kaydettim. Programı hangi öncelikle hazırlayalım?"
+            assistant = self._conversations.add_message(
+                conversation_id=conversation_id,
+                role=MessageRole.ASSISTANT,
+                content=question,
+            )
+            return ChatTurnResponseV1(
+                conversation_id=conversation_id,
+                assistant_message_id=assistant.id,
+                assistant_text=question,
+                intent=ConstructionIntent.SITE_SCHEDULE.value,
+                tools_used=["PROJECT_CONTEXT"],
+                assumptions=list(inherited_assumptions),
+                confidence=confidence,
+                quick_replies=[
+                    {"label": "En hızlı", "value": "fast"},
+                    {"label": "En ekonomik", "value": "economic"},
+                    {"label": "Dengeli", "value": "balanced"},
+                ],
+            )
+
+        result = self._scheduling.create(
+            PlanningRequest(
+                gross_area_m2=gross_area,
+                floor_count=context.floor_count,
+                stage=context.stage or "FOUNDATION_COMPLETED",
+                project_type=context.project_type or "RESIDENTIAL",
+                priority=priority,
+                available_crew=context.available_crew,
+            )
+        )
+        plan_id = self._project_contexts.save_plan(
+            conversation_id,
+            context.version,
+            priority,
+            result,
+        )
+        customer_text = self._render_schedule(result, priority)
+        assistant = self._conversations.add_message(
+            conversation_id=conversation_id,
+            role=MessageRole.ASSISTANT,
+            content=customer_text,
+        )
+        append_outbox(
+            self._session,
+            event_type="conversation.schedule_created.v1",
+            aggregate_id=plan_id,
+            payload={"conversation_id": conversation_id, "context_version": context.version},
+        )
+        planning = {
+            "plan_id": plan_id,
+            "priority": priority.value,
+            "duration_days": str(result.duration_days),
+            "peak_crew": result.peak_crew,
+            "critical_path": list(result.critical_path),
+            "activities": [
+                {
+                    "id": item.activity.id,
+                    "wbs_code": item.activity.wbs_code,
+                    "name": item.activity.name,
+                    "duration_days": str(item.activity.duration_days),
+                    "crew_size": item.activity.crew_size,
+                    "early_start": str(item.early_start),
+                    "early_finish": str(item.early_finish),
+                    "critical": item.critical,
+                }
+                for item in result.activities
+            ],
+        }
+        return ChatTurnResponseV1(
+            conversation_id=conversation_id,
+            assistant_message_id=assistant.id,
+            assistant_text=customer_text,
+            intent=(
+                routed_intent.value
+                if routed_intent != ConstructionIntent.UNKNOWN
+                else ConstructionIntent.SITE_SCHEDULE.value
+            ),
+            tools_used=["PROJECT_CONTEXT", "PRODUCTIVITY_ENGINE", "CPM_ENGINE", "CREW_PLANNER"],
+            assumptions=list(result.assumptions),
+            confidence=confidence,
+            planning=planning,
+            quick_replies=[
+                {"label": "Aktiviteleri göster", "value": "show_activities"},
+                {"label": "Ekibi optimize et", "value": "optimize_crew"},
+            ],
+        )
+
+    @staticmethod
+    def _planning_priority(text: str) -> PlanningPriority | None:
+        folded = fold_text(text)
+        if any(marker in folded for marker in ("en hizli", "en hızlı", "fast", "hizli", "hızlı")):
+            return PlanningPriority.FAST
+        if any(
+            marker in folded
+            for marker in ("ekonomik", "economic", "dusuk maliyet", "düşük maliyet")
+        ):
+            return PlanningPriority.ECONOMIC
+        if any(marker in folded for marker in ("dengeli", "balanced")):
+            return PlanningPriority.BALANCED
+        return None
+
+    @staticmethod
+    def _render_schedule(result: ScheduleResult, priority: PlanningPriority) -> str:
+        priority_label = {
+            PlanningPriority.FAST: "hızlı",
+            PlanningPriority.ECONOMIC: "ekonomik",
+            PlanningPriority.BALANCED: "dengeli",
+        }[priority]
+        critical_names = [
+            item.activity.name
+            for item in result.activities
+            if item.activity.id in result.critical_path
+        ]
+        critical = " → ".join(critical_names[:4])
+        return (
+            f"{priority_label.capitalize()} senaryoda yaklaşık {result.duration_days} "
+            "takvim günü ve "
+            f"en yoğun dönemde {result.peak_crew} kişilik ekip öngörülüyor. Kritik akış: "
+            f"{critical}. Bu, klasik konut varsayımlı ön programdır; onaylı proje ve saha "
+            "kısıtlarıyla kesinleştirilmelidir."
         )
 
     @staticmethod

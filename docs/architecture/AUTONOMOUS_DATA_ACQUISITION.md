@@ -8,6 +8,23 @@ Deterministik durum özeti yalnız DB sayaçlarından üretilir. Keşfedilen, li
 
 ## Bootstrap V1
 
+### Governance hardening
+
+- A permissive license label is not sufficient by itself. The license gate requires a
+  license URL or captured license text; otherwise the source stays `LICENSE_UNKNOWN`.
+- Remote providers are rate limited independently. A provider failure is recorded in
+  the discovery result and does not abort healthy providers.
+- Download policy supports both allow and deny domain lists. Archive extraction also
+  enforces a configurable maximum path depth in addition to traversal, size, file-count,
+  and executable-file checks.
+- A source suspended after an upstream license change is excluded immediately from
+  readiness metrics and new candidate dataset construction.
+- Readiness duplicate ratios are calculated from immutable training-image checksums,
+  not from annotation counts.
+- The authenticated acquisition dashboard is available at
+  `GET /api/v1/training/acquisition/dashboard`; the legacy status endpoint remains
+  backward compatible.
+
 `AutonomousAcquisitionOrchestrator`, `DISCOVERY_ONLY`, `SAFE_ACQUIRE` ve
 `FULL_BOOTSTRAP` modlarını destekler. Tam çalışma `AUTONOMOUS_DATA_ACQUISITION`
 arka plan işi olarak kuyruğa alınır; aşama ve ilerleme kontrol noktaları kalıcıdır.

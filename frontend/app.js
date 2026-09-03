@@ -6,6 +6,7 @@ const state = {
   ledger: null,
   projectId: null,
   uploadedDocuments: [],
+  quickReplies: [],
   uploading: false,
   documentCapabilities: {
     accepted_extensions: [".pdf", ".png", ".jpg", ".jpeg", ".dxf", ".ifc"],
@@ -21,6 +22,7 @@ const elements = {
   form: document.querySelector("#message-form"),
   input: document.querySelector("#message-input"),
   list: document.querySelector("#message-list"),
+  conversationQuickReplies: document.querySelector("#conversation-quick-replies"),
   quotes: document.querySelector("#quote-list"),
   summaryQuantity: document.querySelector("#summary-quantity"),
   summaryTotal: document.querySelector("#summary-total"),
@@ -73,6 +75,7 @@ async function initializeConversation() {
   state.ledger = null;
   state.projectId = null;
   state.uploadedDocuments = [];
+  state.quickReplies = [];
   state.uploading = false;
   elements.list.innerHTML = '<div class="loading-message"><span></span> Görüşme hazırlanıyor…</div>';
   elements.assistantCard.classList.remove("has-conversation");
@@ -104,6 +107,7 @@ async function initializeConversation() {
       state.documentCapabilities.max_upload_bytes = documentTools.max_upload_bytes;
     }
     renderMessages();
+    renderConversationQuickReplies();
     renderQuotes();
     renderFileSupport();
     setConnection("online", "Sistem Hazır");
@@ -155,6 +159,18 @@ function renderMessages() {
       elements.list.lastElementChild?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
   }
+}
+
+function renderConversationQuickReplies() {
+  elements.conversationQuickReplies.replaceChildren();
+  for (const reply of state.quickReplies) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = reply.label;
+    button.addEventListener("click", () => void sendMessage(reply.value));
+    elements.conversationQuickReplies.append(button);
+  }
+  elements.conversationQuickReplies.hidden = !state.quickReplies.length;
 }
 
 function renderSystemError(message) {
@@ -293,6 +309,7 @@ async function sendMessage(text) {
       role: "ASSISTANT",
       content: response.assistant_text,
     });
+    state.quickReplies = response.quick_replies || [];
     state.ledger = await api(
       `/api/v1/conversations/${encodeURIComponent(state.conversationId)}/ledger`,
     );
@@ -302,6 +319,7 @@ async function sendMessage(text) {
     );
     state.quotes = [...savedQuotes, ...transientQuotes];
     renderMessages();
+    renderConversationQuickReplies();
     renderQuotes();
     setConnection("online", "Sistem Hazır");
   } catch (error) {

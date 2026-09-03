@@ -25,6 +25,10 @@ from app.modules.conversation.infrastructure.models import (
     MessageORM,
     VisitorSessionORM,
 )
+from app.modules.conversation_intelligence.infrastructure.models import (
+    ConversationPlanORM,
+    ConversationProjectContextORM,
+)
 from app.modules.customer_understanding.infrastructure.models import AnalysisSnapshotORM
 from app.modules.database_backup.infrastructure.models import DatabaseBackupORM
 from app.modules.document_intelligence.infrastructure.models import DocumentAnalysisORM
@@ -50,6 +54,7 @@ from app.modules.knowledge_acquisition.infrastructure.models import (
     KnowledgeSourceORM,
 )
 from app.modules.legal_knowledge.infrastructure.models import LegalChunkORM, LegalDocumentORM
+from app.modules.planning.infrastructure.models import ProductivityRecordORM
 from app.modules.pricing.infrastructure.models import PriceBookORM
 from app.modules.project_graph.infrastructure.models import (
     BlockSemanticMappingORM,
@@ -108,6 +113,8 @@ __all__ = [
     "BuildingElementORM",
     "CompletedProjectRecordORM",
     "ConversationORM",
+    "ConversationPlanORM",
+    "ConversationProjectContextORM",
     "ConversationTurnReceiptORM",
     "CrossModalAlignmentORM",
     "CrossModalAnnotationLineageORM",
@@ -152,6 +159,7 @@ __all__ = [
     "MessageORM",
     "OutboxEventORM",
     "PriceBookORM",
+    "ProductivityRecordORM",
     "ProjectArchiveImportORM",
     "ProjectBuildingORM",
     "ProjectDocumentORM",

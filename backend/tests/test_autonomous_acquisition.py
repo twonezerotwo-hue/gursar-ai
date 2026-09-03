@@ -150,6 +150,20 @@ def test_license_gate_allows_proven_open_and_blocks_unknown_or_research() -> Non
     assert research["training_use_allowed"] is False
 
 
+def test_license_gate_requires_evidence_for_permissive_license_label() -> None:
+    result = LicenseGate().assess(
+        DiscoveredSource(
+            provider="TEST",
+            source_url="https://example.org/unverified",
+            name="Unverified MIT label",
+            license_name="MIT",
+        )
+    )
+    assert result["rights_status"] == "LICENSE_UNKNOWN"
+    assert result["training_use_allowed"] is False
+    assert result["manual_review_required"] is True
+
+
 def test_discovery_is_idempotent_and_unknown_is_not_approved(app: FastAPI) -> None:
     seeds = [
         {
@@ -168,6 +182,30 @@ def test_discovery_is_idempotent_and_unknown_is_not_approved(app: FastAPI) -> No
         assert first["created"] == 2 and second["reused"] == 2 and len(rows) == 2
         unknown = next(row for row in rows if row.name == "Unknown")
         assert unknown.status == "REVIEWING" and unknown.license_status == "LICENSE_UNKNOWN"
+
+
+def test_discovery_isolates_provider_failure(app: FastAPI) -> None:
+    class FailingProvider:
+        provider_name = "FAIL"
+
+        def discover(self, queries: list[str], limit: int):
+            del queries, limit
+            raise RuntimeError("provider unavailable")
+
+    seeds = [
+        {
+            "name": "Healthy",
+            "source_url": "https://example.org/healthy.zip",
+            "license_name": "MIT",
+            "license_url": "https://example.org/license",
+        }
+    ]
+    with app.state.session_factory.begin() as session:
+        result = DatasetDiscoveryService(
+            session, [FailingProvider(), StaticSeedSourceProvider(seeds)]
+        ).run_discovery(queries=["floor plan"], max_sources=10)
+        assert result["created"] == 1
+        assert result["provider_errors"][0]["provider"] == "FAIL"
 
 
 def test_safe_download_checksum_duplicate_and_traversal_rejection(app: FastAPI) -> None:
@@ -191,6 +229,38 @@ def test_safe_download_checksum_duplicate_and_traversal_rejection(app: FastAPI) 
         unsafe = _zip({"../escape.json": b"{}"})
         with pytest.raises(AcquisitionRuleError, match="ARCHIVE_UNSAFE"):
             manager.download(unsafe_source.id, fetcher=lambda _url: [unsafe])
+
+
+def test_download_blocks_denied_domain_and_excessive_archive_depth(app: FastAPI) -> None:
+    with app.state.session_factory.begin() as session:
+        blocked_source = _source(session, url="https://github.com/test/blocked.zip")
+        blocked = DatasetDownloadManager(
+            session,
+            app.state.document_storage,
+            max_single_file_bytes=1024 * 1024,
+            max_archive_files=20,
+            max_total_bytes=2 * 1024 * 1024,
+            allowed_domains={"github.com"},
+            blocked_domains={"github.com"},
+        )
+        with pytest.raises(AcquisitionRuleError, match="DOMAIN_BLOCKED"):
+            blocked.download(blocked_source.id, fetcher=lambda _url: [b"ignored"])
+
+        deep_source = _source(session, url="https://github.com/test/deep.zip")
+        depth_limited = DatasetDownloadManager(
+            session,
+            app.state.document_storage,
+            max_single_file_bytes=1024 * 1024,
+            max_archive_files=20,
+            max_total_bytes=2 * 1024 * 1024,
+            allowed_domains={"github.com"},
+            max_archive_path_depth=2,
+        )
+        with pytest.raises(AcquisitionRuleError, match="ARCHIVE_INVALID"):
+            depth_limited.download(
+                deep_source.id,
+                fetcher=lambda _url: [_zip({"one/two/three/plan.png": b"png"})],
+            )
 
 
 def test_package_builder_and_dry_run(client: TestClient, app: FastAPI) -> None:
@@ -339,6 +409,14 @@ def test_discovery_job_dry_run_and_api_status(client: TestClient) -> None:
     assert status_response.status_code == 200
 
 
+def test_acquisition_admin_dashboard_requires_review_permission(client: TestClient) -> None:
+    denied = client.get("/api/v1/training/acquisition/dashboard")
+    allowed = client.get("/api/v1/training/acquisition/dashboard", headers=ADMIN)
+    assert denied.status_code in {401, 403}
+    assert allowed.status_code == 200
+    assert "readiness" in allowed.json()
+
+
 def test_ifc_harvester_uses_project_graph_and_prevents_duplicate(
     app: FastAPI, tmp_path: Path
 ) -> None:
@@ -417,6 +495,68 @@ def test_readiness_synthetic_ratio_guard(app: FastAPI) -> None:
         )
         result = DatasetReadinessEngine(session, rules).evaluate()
         assert result["classes"]["WALL"]["status"] == "PARTIALLY_READY"
+
+
+def test_readiness_measures_duplicate_derivative_hashes(app: FastAPI) -> None:
+    with app.state.session_factory.begin() as session:
+        SyntheticProjectFactory(session, app.state.document_storage).generate(
+            count=2, seed=654, building_type="residential", floors_min=1, floors_max=1
+        )
+        derivatives = list(session.scalars(select(TrainingImageDerivativeORM)))
+        assert len(derivatives) == 2
+        derivatives[1].checksum_sha256 = derivatives[0].checksum_sha256
+        rules = dict(load_acquisition_rules()["readiness"])
+        result = DatasetReadinessEngine(session, rules).evaluate()
+        assert result["classes"]["WALL"]["duplicate_ratio"] == 0.5
+
+
+def test_readiness_excludes_annotations_from_suspended_source(app: FastAPI) -> None:
+    with app.state.session_factory.begin() as session:
+        SyntheticProjectFactory(session, app.state.document_storage).generate(
+            count=1, seed=655, building_type="residential", floors_min=1, floors_max=1
+        )
+        annotation = session.scalar(
+            select(VisionAnnotationORM).where(VisionAnnotationORM.class_name == "WALL")
+        )
+        assert annotation is not None
+        annotation.source_type = "EXTERNAL_GROUND_TRUTH"
+        source = _source(session, url="https://github.com/test/suspend.zip")
+        package = ExternalProjectPackageORM(
+            source_id=source.id,
+            external_project_id="SUSPEND-1",
+            project_id=annotation.project_id,
+            files_json=[],
+            annotation_files_json=[],
+            project_quality_score=90,
+            training_eligibility="ELIGIBLE",
+            rights_status="OPEN_LICENSED",
+            ingestion_status="INGESTED",
+        )
+        session.add(package)
+        session.flush()
+        session.add(
+            ExternalAnnotationLineageORM(
+                annotation_id=annotation.id,
+                source_id=source.id,
+                project_package_id=package.id,
+                original_file="plan.png",
+                annotation_file="annotations.json",
+                external_class="wall",
+                importer_version="TEST",
+                mapping_version=MAPPING_VERSION,
+                normalization_version="TEST",
+                quality_tier="SILVER",
+            )
+        )
+        session.flush()
+        rules = dict(load_acquisition_rules()["readiness"])
+        before = DatasetReadinessEngine(session, rules).evaluate()
+        source.status = "SUSPENDED"
+        session.flush()
+        after = DatasetReadinessEngine(session, rules).evaluate()
+        assert after["classes"]["WALL"]["annotations"] == (
+            before["classes"]["WALL"]["annotations"] - 1
+        )
 
 
 def test_source_ranking_and_family_are_deterministic(app: FastAPI) -> None:

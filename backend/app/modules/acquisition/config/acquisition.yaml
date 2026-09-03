@@ -35,6 +35,9 @@ allowed_domains:
   - buildingsmart.org
   - technical.buildingsmart.org
   - zenodo.org
+blocked_domains: []
+provider_minimum_request_interval_seconds: 1.0
+max_archive_path_depth: 20
 max_sources_per_run: 40
 max_downloads_per_run: 10
 synthetic:

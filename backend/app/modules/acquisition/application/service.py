@@ -151,9 +151,17 @@ class StaticSeedSourceProvider:
 class GitHubDiscoveryProvider:
     provider_name = "GITHUB"
 
-    def __init__(self, *, timeout: float = 10, allowed_domains: set[str] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        timeout: float = 10,
+        allowed_domains: set[str] | None = None,
+        minimum_request_interval: float = 0,
+    ) -> None:
         self._timeout = timeout
         self._allowed_domains = allowed_domains or {"api.github.com", "github.com"}
+        self._minimum_request_interval = max(0.0, minimum_request_interval)
+        self._last_request_at = 0.0
 
     def discover(self, queries: list[str], limit: int) -> Iterable[DiscoveredSource]:
         remaining = limit
@@ -168,6 +176,7 @@ class GitHubDiscoveryProvider:
             request = Request(
                 url, headers={"Accept": "application/vnd.github+json", "User-Agent": "GURSAR-AI/1"}
             )
+            self._wait_for_rate_limit()
             with urlopen(request, timeout=self._timeout) as response:
                 payload = json.load(response)
             for item in payload.get("items", []):
@@ -190,12 +199,21 @@ class GitHubDiscoveryProvider:
                 if remaining <= 0:
                     break
 
+    def _wait_for_rate_limit(self) -> None:
+        elapsed = time.monotonic() - self._last_request_at
+        delay = self._minimum_request_interval - elapsed
+        if delay > 0:
+            time.sleep(delay)
+        self._last_request_at = time.monotonic()
+
 
 class HuggingFaceDiscoveryProvider:
     provider_name = "HUGGINGFACE"
 
-    def __init__(self, *, timeout: float = 10) -> None:
+    def __init__(self, *, timeout: float = 10, minimum_request_interval: float = 0) -> None:
         self._timeout = timeout
+        self._minimum_request_interval = max(0.0, minimum_request_interval)
+        self._last_request_at = 0.0
 
     def discover(self, queries: list[str], limit: int) -> Iterable[DiscoveredSource]:
         remaining = limit
@@ -205,6 +223,7 @@ class HuggingFaceDiscoveryProvider:
             search = query.replace(" ", "%20")
             url = f"https://huggingface.co/api/datasets?search={search}&limit={min(remaining, 10)}"
             request = Request(url, headers={"User-Agent": "GURSAR-AI/1"})
+            self._wait_for_rate_limit()
             with urlopen(request, timeout=self._timeout) as response:
                 payload = json.load(response)
             for item in payload:
@@ -223,6 +242,13 @@ class HuggingFaceDiscoveryProvider:
                 remaining -= 1
                 if remaining <= 0:
                     break
+
+    def _wait_for_rate_limit(self) -> None:
+        elapsed = time.monotonic() - self._last_request_at
+        delay = self._minimum_request_interval - elapsed
+        if delay > 0:
+            time.sleep(delay)
+        self._last_request_at = time.monotonic()
 
 
 class OfficialDatasetProvider(StaticSeedSourceProvider):
@@ -250,9 +276,7 @@ class LicenseGate:
         )
         if source.access_status != "PUBLIC":
             return self._decision(source, "REFERENCE_ONLY", text_hash, manual=True)
-        if name in self._permissive and (
-            source.license_url or source.license_text or name == "MIT"
-        ):
+        if name in self._permissive and (source.license_url or source.license_text):
             commercial, derivative, training, redistribution, attribution = self._permissive[name]
             return {
                 **self._decision(source, "OPEN_LICENSED", text_hash, manual=False),
@@ -303,13 +327,23 @@ class DatasetDiscoveryService:
         self, *, queries: list[str], max_sources: int, dry_run: bool = False
     ) -> dict[str, Any]:
         found: list[DiscoveredSource] = []
+        provider_errors: list[dict[str, str]] = []
         for provider in self._providers:
             if len(found) >= max_sources:
                 break
-            found.extend(provider.discover(queries, max_sources - len(found)))
+            try:
+                found.extend(provider.discover(queries, max_sources - len(found)))
+            except Exception as exc:
+                provider_errors.append(
+                    {"provider": provider.provider_name, "error": type(exc).__name__}
+                )
         unique = {item.source_url: item for item in found}
         if dry_run:
-            return {"would_discover": len(unique), "sources": sorted(unique)}
+            return {
+                "would_discover": len(unique),
+                "sources": sorted(unique),
+                "provider_errors": provider_errors,
+            }
         created = reused = unknown = approved = 0
         gate = LicenseGate()
         for item in unique.values():
@@ -380,6 +414,7 @@ class DatasetDiscoveryService:
             "reused": reused,
             "approved": approved,
             "license_unknown": unknown,
+            "provider_errors": provider_errors,
         }
 
     @staticmethod
@@ -437,6 +472,8 @@ class DatasetDownloadManager:
         max_storage_bytes: int | None = None,
         storage_root: Path | None = None,
         min_free_bytes: int = 0,
+        blocked_domains: set[str] | None = None,
+        max_archive_path_depth: int = 20,
     ) -> None:
         self._session = session
         self._storage = storage
@@ -448,6 +485,8 @@ class DatasetDownloadManager:
         self._max_storage = max_storage_bytes or max_total_bytes
         self._storage_root = storage_root
         self._min_free_bytes = min_free_bytes
+        self._blocked_domains = blocked_domains or set()
+        self._max_archive_path_depth = max(1, max_archive_path_depth)
 
     def download(
         self,
@@ -480,6 +519,8 @@ class DatasetDownloadManager:
         if existing_source_manifest is not None and not dry_run:
             return existing_source_manifest, {"reused": True, "error": "DUPLICATE_DATASET"}
         host = urlparse(source.source_url).hostname or ""
+        if host in self._blocked_domains:
+            raise AcquisitionRuleError("DOMAIN_BLOCKED")
         if host not in self._allowed_domains and fetcher is None:
             raise AcquisitionRuleError("DOMAIN_NOT_ALLOWED")
         if dry_run:
@@ -612,6 +653,8 @@ class DatasetDownloadManager:
                     if info.is_dir():
                         continue
                     raise AcquisitionRuleError("ARCHIVE_UNSAFE")
+                if len(path.parts) > self._max_archive_path_depth:
+                    raise AcquisitionRuleError("ARCHIVE_INVALID")
                 if suffix in EXECUTABLE_EXTENSIONS or suffix not in ALLOWED_EXTENSIONS - {".zip"}:
                     raise AcquisitionRuleError("UNSUPPORTED_FORMAT")
                 total_uncompressed += info.file_size
@@ -778,6 +821,50 @@ def curated_buildingsmart_ifc_archive(*, limit: int = 40, timeout: float = 30) -
     yield output.getvalue()
 
 
+def _training_source_governance(session: Session) -> tuple[dict[str, str], set[str]]:
+    """Resolve governed annotations to sources that are still safe for training.
+
+    License discovery is intentionally continuous. If an upstream license changes,
+    discovery suspends that source; annotations already imported from it must stop
+    contributing to readiness and new dataset candidates immediately.
+    """
+    source_by_annotation = {
+        row.annotation_id: row.source_id
+        for row in session.scalars(select(ExternalAnnotationLineageORM))
+    }
+    render_sources = {row.id: row.source_id for row in session.scalars(select(Ifc2DRenderORM))}
+    for row in session.scalars(select(Ifc2DAnnotationLineageORM)):
+        source_id = render_sources.get(row.render_id)
+        if source_id:
+            source_by_annotation[row.annotation_id] = source_id
+    for row in session.scalars(select(CrossModalAnnotationLineageORM)):
+        source_id = source_by_annotation.get(row.ifc_annotation_id)
+        if source_id:
+            source_by_annotation[row.annotation_id] = source_id
+
+    allowed_source_ids = {
+        row.id
+        for row in session.scalars(select(DiscoveredDatasetSourceORM))
+        if row.status in {"APPROVED", "DOWNLOADED"} and row.license_status in TRAINING_RIGHTS
+    }
+    return source_by_annotation, allowed_source_ids
+
+
+def _duplicate_image_ratio(session: Session, rows: list[VisionAnnotationORM]) -> float:
+    derivative_ids = {row.image_derivative_id for row in rows if row.image_derivative_id}
+    if not derivative_ids:
+        return 0.0
+    checksums = {
+        row.checksum_sha256
+        for row in session.scalars(
+            select(TrainingImageDerivativeORM).where(
+                TrainingImageDerivativeORM.id.in_(derivative_ids)
+            )
+        )
+    }
+    return (len(derivative_ids) - len(checksums)) / max(1, len(derivative_ids))
+
+
 class DatasetCandidateBuilder:
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -814,6 +901,13 @@ class DatasetCandidateBuilder:
                 )
             )
         )
+        source_by_annotation, allowed_source_ids = _training_source_governance(self._session)
+        eligible = [
+            row
+            for row in eligible
+            if row.id not in source_by_annotation
+            or source_by_annotation[row.id] in allowed_source_ids
+        ]
         if not eligible:
             return None
         rows, selection = self._balanced_selection(eligible)
@@ -1086,6 +1180,8 @@ class AutonomousAcquisitionOrchestrator:
             max_archive_files=50_000,
             max_total_bytes=int(float(rules["acquisition"]["max_total_download_gb"]) * 1024**3),
             allowed_domains=set(rules["allowed_domains"]),
+            blocked_domains=set(rules.get("blocked_domains", [])),
+            max_archive_path_depth=int(rules.get("max_archive_path_depth", 20)),
             timeout=60,
             max_storage_bytes=int(float(rules["acquisition"]["max_total_download_gb"]) * 1024**3),
             storage_root=self._storage_root,
@@ -1373,7 +1469,7 @@ def acquisition_status_summary(session: Session) -> dict[str, Any]:
                 "files": len(files),
                 "projects": len({row.project_id for row in source_packages if row.project_id}),
                 "samples": len(lineage),
-                "valid_ratio": round(valid_count / max(1, valid_denominator), 4),
+                "valid_ratio": round(min(1.0, valid_count / max(1, valid_denominator)), 4),
                 "duplicate_ratio": round((len(files) - unique_files) / max(1, len(files)), 4),
                 "classes": dict(class_counts),
                 "quality_score": source.quality_score,
@@ -2097,6 +2193,7 @@ class DatasetReadinessEngine:
         warnings: set[str] = set()
         targets = self._rules.get("class_targets", {})
         real_targets = self._rules.get("real_data_targets", {})
+        source_by_annotation, allowed_source_ids = _training_source_governance(self._session)
         source_family_by_id = {
             row.id: (row.source_family_id or row.id)
             for row in self._session.scalars(select(DiscoveredDatasetSourceORM))
@@ -2133,6 +2230,12 @@ class DatasetReadinessEngine:
                     )
                 )
             )
+            rows = [
+                row
+                for row in rows
+                if row.id not in source_by_annotation
+                or source_by_annotation[row.id] in allowed_source_ids
+            ]
             projects = len({row.project_id for row in rows})
             quality = round(sum(row.quality_score for row in rows) / max(1, len(rows)))
             tier_counts = Counter(canonical_source_tier(row.source_type) for row in rows)
@@ -2179,7 +2282,7 @@ class DatasetReadinessEngine:
             bim_or_real_requirement = int(class_real_target.get("bim_or_real", 0))
             real_target_met = real_drawing >= real_requirement
             bim_target_met = real_drawing + bim_derived >= bim_or_real_requirement
-            duplicate_ratio = 0.0
+            duplicate_ratio = _duplicate_image_ratio(self._session, rows)
             ready = (
                 projects >= int(self._rules["minimum_projects"])
                 and len(rows) >= target
@@ -2227,7 +2330,7 @@ class DatasetReadinessEngine:
                 "candidate_synthetic_ratio": round(synthetic_selected / max(1, candidate_total), 4),
                 "source_families": len(governed_families),
                 "source_concentration": round(concentration, 4),
-                "duplicate_ratio": duplicate_ratio,
+                "duplicate_ratio": round(duplicate_ratio, 4),
                 "total_annotations": len(rows),
                 "real_drawing_annotations": real_drawing,
                 "bim_derived_annotations": bim_derived,

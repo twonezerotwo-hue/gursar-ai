@@ -37,6 +37,12 @@ class ChatTurnResponseV1(BaseModel):
     assistant_message_id: str
     assistant_text: str
     quotes: list[QuickQuoteV1] = Field(default_factory=list)
+    quick_replies: list[dict[str, str]] = Field(default_factory=list)
+    intent: str = "UNKNOWN"
+    tools_used: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    confidence: float | None = None
+    planning: dict[str, Any] | None = None
 
 
 class LedgerQuantityTotalV1(BaseModel):
