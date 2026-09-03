@@ -1,0 +1,19 @@
+analysis_version: STRUCTURAL_LOAD_PATH_V1
+terminal_element_types:
+  - FOUNDATION
+  - FOOTING
+  - PILE
+allowed_supports:
+  SLAB: [BEAM, COLUMN, SHEAR_WALL, WALL]
+  BEAM: [BEAM, COLUMN, SHEAR_WALL, WALL]
+  COLUMN: [COLUMN, SHEAR_WALL, WALL, FOUNDATION, FOOTING, PILE]
+  SHEAR_WALL: [SHEAR_WALL, WALL, FOUNDATION, FOOTING, PILE]
+  WALL: [WALL, SHEAR_WALL, FOUNDATION, FOOTING, PILE]
+  FOUNDATION: [PILE]
+  FOOTING: [PILE]
+required_properties:
+  BEAM: [material, width, height]
+  COLUMN: [material, width, height]
+  SHEAR_WALL: [material, thickness]
+  SLAB: [material, thickness]
+elevation_tolerance_m: 0.01

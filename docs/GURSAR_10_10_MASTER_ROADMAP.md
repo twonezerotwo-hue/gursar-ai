@@ -1,11 +1,11 @@
 # GÜRSAR AI — Global Construction Intelligence Roadmap
 
-Current phase base commit: `b03ecb5`
+Current phase base commit: `0578512`
 
-Current phase: `PHASE 3A — Architectural Spatial Graph`
+Current phase: `PHASE 4A — Structural Graph and Load-Path Foundation`
 
-Current overall simple score: `5.22 / 10`
-Weighted product-readiness score: `5.00 / 10`
+Current overall simple score: `5.31 / 10`
+Weighted product-readiness score: `5.12 / 10`
 
 Status values: `NOT_STARTED`, `FOUNDATION`, `FUNCTIONAL`, `VALIDATED`,
 `BLOCKED_BY_REAL_DATA`, `PRODUCTION_READY`. No area is production-ready without measured,
@@ -15,11 +15,11 @@ auditable, security-tested, documented, realistic-data evidence.
 
 | Category | Before | After | /10 target | Status | Evidence | Main remaining gap |
 |---|---:|---:|---:|---|---|---|
-| Backend / Domain Architecture | 7.5 | 7.6 | 10 | VALIDATED | Shared ProjectGraph, idempotent spatial service, migration, 238 tests | Distributed production validation |
-| Data Governance | 7.7 | 7.8 | 10 | VALIDATED | Immutable analysis snapshot, audit, evidence IDs, existing rights/lineage | Retention and tenant policy |
+| Backend / Domain Architecture | 7.6 | 7.7 | 10 | VALIDATED | Shared ProjectGraph, modular structural service, idempotency, migration, 246 tests | Distributed production validation |
+| Data Governance | 7.8 | 7.9 | 10 | VALIDATED | Immutable structural runs and loads, audit, evidence IDs, existing rights/lineage | Retention and tenant policy |
 | Security | 7.5 | 7.5 | 10 | VALIDATED | Ownership, RBAC, upload/license gates | Full threat model and penetration test |
-| RAG / Knowledge Infrastructure | 7.2 | 7.8 | 10 | VALIDATED | 17,379 chunks, bounded FTS/vector retrieval, hierarchy | pgvector production benchmark |
-| Construction Knowledge | 5.5 | 6.8 | 10 | FUNCTIONAL | Rule applicability, 17 domain routes, conflict/UNVERIFIED | Expert-validated multi-domain rule coverage |
+| RAG / Knowledge Infrastructure | 7.8 | 7.8 | 10 | VALIDATED | 17,379 chunks, bounded FTS/vector retrieval, hierarchy | pgvector production benchmark |
+| Construction Knowledge | 6.8 | 6.8 | 10 | FUNCTIONAL | Rule applicability, 17 domain routes, conflict/UNVERIFIED | Expert-validated multi-domain rule coverage |
 | BIM / IFC Intelligence | 7.5 | 7.5 | 10 | VALIDATED | Qto, geometry, evidence, relations | Broader real IFC suite and 4D/5D |
 | Vector PDF Intelligence | 7.0 | 7.0 | 10 | VALIDATED | Sheet/region/scale/vector evidence | Diverse real drawing benchmark |
 | DXF / CAD Intelligence | 7.2 | 7.2 | 10 | VALIDATED | Units, mappings, geometry, evidence | Office-standard and large-file validation |
@@ -27,8 +27,8 @@ auditable, security-tested, documented, realistic-data evidence.
 | Vision Model Intelligence | 2.5 | 2.5 | 10 | BLOCKED_BY_REAL_DATA | Training readiness gate prevents fake model | Verified real dataset and trained model |
 | Quantity Intelligence | 6.8 | 6.8 | 10 | FUNCTIONAL | Deterministic evidence/source priority | Full BOQ rules and real tender validation |
 | Cost Intelligence | 5.5 | 5.5 | 10 | FUNCTIONAL | Versioned prices and deterministic totals | Supplier/date/scenario/actual-cost depth |
-| Architecture Intelligence | 4.8 | 6.2 | 10 | FUNCTIONAL | Space/zone graph, adjacency, backend area, deterministic evidence-linked QA | Real drawing extraction, regulation packs and expert benchmark |
-| Structural Engineering | 4.0 | 4.0 | 10 | FOUNDATION | IFC structural elements and estimates | Load path, rebar parser, solver interfaces |
+| Architecture Intelligence | 6.2 | 6.2 | 10 | FUNCTIONAL | Space/zone graph, adjacency, backend area, deterministic evidence-linked QA | Real drawing extraction, regulation packs and expert benchmark |
+| Structural Engineering | 4.0 | 5.8 | 10 | FUNCTIONAL | Shared structural graph, deterministic load-path checks, immutable loads and evidence | Rebar parser, code/solver adapters and engineer-reviewed real benchmark |
 | MEP Intelligence | 2.0 | 2.0 | 10 | FOUNDATION | Shared taxonomy and MEP knowledge route | Discipline graphs and verified takeoff |
 | Scheduling / Planning | 5.8 | 5.8 | 10 | FUNCTIONAL | WBS, CPM, productivity and crew plan | Resource leveling and actual calibration |
 | Site Management | 1.5 | 1.5 | 10 | NOT_STARTED | Site knowledge route only | Daily report, progress, RFI and issues |
@@ -39,7 +39,7 @@ auditable, security-tested, documented, realistic-data evidence.
 | Customer UX / Conversation | 6.2 | 6.3 | 10 | FUNCTIONAL | Persistent context, quick replies, rule API | Automatic safe tool invocation and golden journeys |
 | Continuous Learning | 6.0 | 6.0 | 10 | FUNCTIONAL | Review, active learning, versioned datasets | Actual site/cost/productivity feedback |
 | Production / SaaS | 4.5 | 4.5 | 10 | FOUNDATION | PostgreSQL compatibility, jobs, backup | Tenancy, observability, deployment hardening |
-| Global Product Readiness | 4.7 | 4.9 | 10 | FOUNDATION | Integrated deterministic subsystems plus architectural spatial graph | Global real-project end-to-end validation |
+| Global Product Readiness | 4.9 | 5.1 | 10 | FUNCTIONAL | Integrated architecture and structural topology checks on shared ProjectGraph | Global real-project end-to-end validation |
 
 ## Completed phases
 
@@ -50,6 +50,9 @@ auditable, security-tested, documented, realistic-data evidence.
 3. Phase 3A Architectural Spatial Graph: shared ProjectGraph spaces and relationships,
    zones, deterministic area calculation, adjacency/access/privacy/daylight/wet-core QA,
    immutable analysis snapshots, audit evidence and admin API.
+4. Phase 4A Structural Graph and Load-Path Foundation: shared structural elements and support
+   relationships, immutable declared loads, topology/elevation/property checks, evidence, audit and
+   admin API without unsafe design claims.
 
 ## Blocked areas
 
@@ -66,6 +69,9 @@ auditable, security-tested, documented, realistic-data evidence.
   dedicated program-editing UX; the analysis service correctly refuses silent mutation.
 - Architectural regulation checks and drawing-derived spaces still require licensed real data and
   architect-reviewed golden cases.
+- Structural validation is topological only; member capacity, code load combinations, joints,
+  reinforcement and finite-element results are deliberately outside this slice.
+- Structural graph changes require a dedicated immutable relationship-correction UX.
 - Resource leveling and project actuals are incomplete.
 - Synthetic vision data has high duplicate-image concentration.
 - Starlette TestClient emits one upstream deprecation warning.
@@ -79,23 +85,23 @@ auditable, security-tested, documented, realistic-data evidence.
 
 ## Last validation
 
-- Tests: `238/238` passed for this phase checkpoint
+- Tests: `246/246` passed for this phase checkpoint
 - Knowledge chunks protected: `17,379`
-- Latest migration: `0020`
+- Latest migration: `0021`
 - Migration backup: restore-validated SQLite backup before upgrade; post-upgrade integrity `ok`
-- Benchmark: 250 spaces and 249 connections in 338.78 ms; idempotent reuse in 8.48 ms
-- Real-data benchmark: pending licensed architectural programs and expert review
+- Benchmark: 501 structural elements and 500 support relationships in 292.08 ms; idempotent reuse
+  in 16.89 ms
+- Real-data benchmark: pending licensed structural models and engineer review
 
 ## Next highest priority phase
 
-`PHASE 4A — Structural Graph and Load-Path Foundation`
+`PHASE 4B — Structural Drawing and Rebar Schedule Parser`
 
-Deliver reusable support/load relationships on the shared ProjectGraph, deterministic load-path
-continuity checks, structural issue evidence and engineer-reviewed golden tests without performing
-automatic structural design.
+Deliver deterministic grid/member/rebar schedule parsing with source evidence, explicit uncertainty,
+review integration and golden fixtures. Do not perform automatic reinforcement or member design.
 
 ## Next actions
 
-1. Commit and push the green Phase 3A checkpoint.
-2. Define structural load/support relationships on existing BuildingElements.
-3. Add deterministic continuity checks before any solver or reinforcement design integration.
+1. Commit and push the green Phase 4A checkpoint.
+2. Define evidence-backed grid, member mark and rebar schedule records from structured sources.
+3. Add immutable engineer correction before any code/solver integration.

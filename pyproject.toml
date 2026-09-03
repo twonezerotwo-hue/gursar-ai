@@ -48,6 +48,7 @@ where = ["backend"]
 "app.modules.training" = ["config/*.yaml"]
 "app.modules.acquisition" = ["config/*.yaml"]
 "app.modules.architecture_intelligence" = ["config/*.yaml"]
+"app.modules.structural_intelligence" = ["config/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]

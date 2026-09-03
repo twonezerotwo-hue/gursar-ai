@@ -45,6 +45,7 @@ from app.modules.pricing.api.router import router as price_router
 from app.modules.project_graph.api.router import router as project_graph_router
 from app.modules.projects.api.router import router as project_router
 from app.modules.qr.api.router import router as qr_router
+from app.modules.structural_intelligence.api.router import router as structural_intelligence_router
 from app.modules.training.api.router import router as training_router
 from app.modules.vision.api.router import router as vision_router
 
@@ -137,6 +138,7 @@ def create_app(*, settings: Settings | None = None, engine: Engine | None = None
     application.include_router(vision_router)
     application.include_router(acquisition_router)
     application.include_router(intelligence_router)
+    application.include_router(structural_intelligence_router)
 
     @application.get("/api/health", tags=["system"])
     def health() -> dict[str, str]:

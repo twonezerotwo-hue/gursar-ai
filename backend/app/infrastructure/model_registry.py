@@ -86,6 +86,10 @@ from app.modules.projects.infrastructure.models import ProjectORM
 from app.modules.qr.infrastructure.models import QRSourceORM
 from app.modules.quick_quote.infrastructure.models import QuickQuoteORM
 from app.modules.service_catalog.infrastructure.models import ServiceCatalogORM
+from app.modules.structural_intelligence.infrastructure.models import (
+    StructuralAnalysisRunORM,
+    StructuralLoadORM,
+)
 from app.modules.training.infrastructure.models import (
     ActiveLearningItemORM,
     AnonymizedDerivativeORM,
@@ -182,6 +186,8 @@ __all__ = [
     "ServiceCatalogORM",
     "SheetMetadataRevisionORM",
     "SheetORM",
+    "StructuralAnalysisRunORM",
+    "StructuralLoadORM",
     "SyntheticProjectORM",
     "TakeoffItemORM",
     "TrainingImageDerivativeORM",
