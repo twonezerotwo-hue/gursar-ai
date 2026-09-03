@@ -25,10 +25,13 @@ from app.modules.knowledge_acquisition.application.retrieval import (
     HybridKnowledgeSearch,
     route_knowledge_query,
 )
+from app.modules.knowledge_acquisition.application.rules import RuleApplicabilityEngine
 from app.modules.knowledge_acquisition.domain.models import (
     KnowledgeSourceClass,
     KnowledgeSourceDefinition,
     RedistributionPolicy,
+    RuleApplicabilityContext,
+    RuleApplicabilityStatus,
     Taxonomy,
 )
 from app.modules.knowledge_acquisition.infrastructure.config import KnowledgeConfig
@@ -279,6 +282,94 @@ def test_conflicting_active_rules_are_recorded_not_silently_overwritten(
     assert len(active_rules) >= 2
 
 
+def test_rule_applicability_prefers_source_hierarchy_and_returns_evidence(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    regulation = source_definition(
+        key="regulation-rule", url="https://www.afad.gov.tr/regulation.html", quality=100
+    )
+    law = replace(
+        source_definition(key="law-rule", url="https://www.afad.gov.tr/law.html", quality=100),
+        taxonomy=replace(regulation.taxonomy, source_class=KnowledgeSourceClass.LAW),
+    )
+    payloads = {
+        regulation.source_url: html_rule(30) + b"<!-- regulation -->",
+        law.source_url: html_rule(30) + b"<!-- law -->",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            content=payloads[str(request.url)],
+            request=request,
+        )
+
+    with app.state.session_factory.begin() as session:
+        repository = KnowledgeRepository(session)
+        KnowledgeAcquisitionPipeline(
+            repository,
+            KnowledgeConfig(),
+            storage_root=tmp_path / "knowledge",
+            transport=httpx.MockTransport(handler),
+        ).run((regulation, law), approve_official=True)
+        result = RuleApplicabilityEngine(repository, KnowledgeConfig()).evaluate(
+            RuleApplicabilityContext(
+                query="yangın kaçış mesafesi",
+                jurisdiction="TR",
+                topic="escape_distance",
+            )
+        )
+
+    assert result.status == RuleApplicabilityStatus.APPLICABLE
+    assert result.selected is not None
+    assert result.selected.source_class == KnowledgeSourceClass.LAW
+    assert result.selected.source_url == law.source_url
+    assert result.selected.version == "2026.1"
+    assert result.selected.article is not None
+    assert len(result.evaluation_checksum) == 64
+
+
+def test_rule_applicability_surfaces_live_conflict_and_unknown_as_unverified(
+    app: FastAPI, tmp_path: Path
+) -> None:
+    sources = (
+        source_definition(key="conflict-30", url="https://www.afad.gov.tr/conflict-30.html"),
+        source_definition(key="conflict-45", url="https://www.afad.gov.tr/conflict-45.html"),
+    )
+    payloads = {sources[0].source_url: html_rule(30), sources[1].source_url: html_rule(45)}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            content=payloads[str(request.url)],
+            request=request,
+        )
+
+    with app.state.session_factory.begin() as session:
+        repository = KnowledgeRepository(session)
+        KnowledgeAcquisitionPipeline(
+            repository,
+            KnowledgeConfig(),
+            storage_root=tmp_path / "knowledge",
+            transport=httpx.MockTransport(handler),
+        ).run(sources, approve_official=True)
+        engine = RuleApplicabilityEngine(repository, KnowledgeConfig())
+        conflict = engine.evaluate(
+            RuleApplicabilityContext(query="yangın kaçış mesafesi", topic="escape_distance")
+        )
+        unknown = engine.evaluate(
+            RuleApplicabilityContext(query="kuantum şantiye zorunluluğu", topic="unknown_topic")
+        )
+
+    assert conflict.status == RuleApplicabilityStatus.CONFLICT
+    assert conflict.conflict_ids
+    assert conflict.requires_professional_review is True
+    assert unknown.status == RuleApplicabilityStatus.UNVERIFIED
+    assert unknown.selected is None
+
+
 def test_pdf_text_layer_parser_extracts_article() -> None:
     buffer = io.BytesIO()
     writer = PdfWriter()
@@ -319,6 +410,56 @@ def test_pdf_text_layer_parser_extracts_article() -> None:
 )
 def test_acceptance_query_routing(query: str, expected: str) -> None:
     assert expected in route_knowledge_query(query)["routes"]
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_domain"),
+    [
+        ("İş güvenliği risk değerlendirmesi", "HSE"),
+        ("NCR kalite uygunsuzluk kaydı", "QUALITY"),
+        ("Hakediş ve sözleşme değişikliği", "CONTRACT"),
+        ("Elektrik kablo ve mekanik boru", "MEP"),
+        ("Kritik yol iş programı", "PLANNING"),
+    ],
+)
+def test_domain_collection_routing(query: str, expected_domain: str) -> None:
+    assert expected_domain in route_knowledge_query(query)["domain_collections"]
+
+
+def test_rule_applicability_api_returns_traceable_result(
+    client, app: FastAPI, tmp_path: Path
+) -> None:
+    url = "https://www.afad.gov.tr/api-rule.html"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            content=html_rule(30),
+            request=request,
+        )
+
+    with app.state.session_factory.begin() as session:
+        KnowledgeAcquisitionPipeline(
+            KnowledgeRepository(session),
+            KnowledgeConfig(),
+            storage_root=tmp_path / "knowledge",
+            transport=httpx.MockTransport(handler),
+        ).run((source_definition(key="api-rule", url=url),), approve_official=True)
+
+    response = client.post(
+        "/api/v1/knowledge/rules/evaluate",
+        json={
+            "query": "yangın kaçış mesafesi",
+            "topic": "escape_distance",
+            "jurisdiction": "TR",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "APPLICABLE"
+    assert payload["selected"]["source_url"] == url
+    assert len(payload["evaluation_checksum"]) == 64
 
 
 def test_section_diff_marks_added_and_removed_without_overwriting() -> None:

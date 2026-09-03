@@ -15,9 +15,10 @@ chunking:
 embedding:
   dimensions: 192
 retrieval:
-  lexical_weight: 0.62
-  vector_weight: 0.28
+  lexical_weight: 0.58
+  vector_weight: 0.27
   authority_weight: 0.10
+  source_hierarchy_weight: 0.05
   k1: 1.2
   b: 0.75
 rule_extraction:

@@ -46,6 +46,13 @@ class KnowledgeStatus(StrEnum):
     METADATA_ONLY = "METADATA_ONLY"
 
 
+class RuleApplicabilityStatus(StrEnum):
+    APPLICABLE = "APPLICABLE"
+    UNVERIFIED = "UNVERIFIED"
+    CONFLICT = "CONFLICT"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
 class RedistributionPolicy(StrEnum):
     ALLOWED = "ALLOWED"
     METADATA_ONLY = "METADATA_ONLY"
@@ -116,6 +123,51 @@ class KnowledgeSearchHit:
     data_confidence: int
     content: str
     score: float
+    collection: str = "TECHNICAL_SPECIFICATIONS"
+    jurisdiction: str = "TR"
+    verification_status: str = "ACTIVE"
+
+
+@dataclass(frozen=True, slots=True)
+class RuleApplicabilityContext:
+    query: str
+    jurisdiction: str = "TR"
+    building_type: str = "all"
+    topic: str | None = None
+    as_of: date | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RuleEvidence:
+    rule_id: str
+    document_version_id: str
+    document_name: str
+    source_url: str
+    source_class: KnowledgeSourceClass
+    authority: str
+    article: str | None
+    requirement: str
+    condition: str
+    version: str
+    jurisdiction: str
+    building_type: str
+    effective_from: date | None
+    effective_until: date | None
+    source_quality_score: int
+    authority_rank: int
+
+
+@dataclass(frozen=True, slots=True)
+class RuleApplicabilityResult:
+    status: RuleApplicabilityStatus
+    context: RuleApplicabilityContext
+    selected: RuleEvidence | None
+    evidence: tuple[RuleEvidence, ...]
+    conflict_ids: tuple[str, ...]
+    warnings: tuple[str, ...]
+    engine_version: str
+    evaluation_checksum: str
+    requires_professional_review: bool
 
 
 @dataclass(slots=True)

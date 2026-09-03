@@ -20,6 +20,7 @@ class KnowledgeConfig:
         self.trusted = self._load("trusted_sources.yaml")
         self.pipeline = self._load("pipeline.yaml")
         self.catalog = self._load("source_catalog.yaml")
+        self.brain = self._load("knowledge_brain.yaml")
 
     def sources(self) -> tuple[KnowledgeSourceDefinition, ...]:
         return tuple(self._source(item) for item in self.catalog["sources"])

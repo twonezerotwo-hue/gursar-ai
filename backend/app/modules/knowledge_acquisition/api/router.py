@@ -10,6 +10,7 @@ from app.core.persistence import append_audit, append_outbox
 from app.core.security import require_admin_key
 from app.modules.knowledge_acquisition.api.schemas import (
     AcquisitionRequest,
+    KnowledgeRuleEvaluationRequest,
     KnowledgeSearchRequest,
 )
 from app.modules.knowledge_acquisition.application.pipeline import (
@@ -19,6 +20,8 @@ from app.modules.knowledge_acquisition.application.retrieval import (
     HybridKnowledgeSearch,
     route_knowledge_query,
 )
+from app.modules.knowledge_acquisition.application.rules import RuleApplicabilityEngine
+from app.modules.knowledge_acquisition.domain.models import RuleApplicabilityContext
 from app.modules.knowledge_acquisition.infrastructure.config import KnowledgeConfig
 from app.modules.knowledge_acquisition.infrastructure.repository import KnowledgeRepository
 
@@ -49,6 +52,17 @@ def search_knowledge(
 @router.get("/route")
 def route_query(q: str) -> dict:
     return route_knowledge_query(q)
+
+
+@router.post("/rules/evaluate")
+def evaluate_rule_applicability(
+    payload: KnowledgeRuleEvaluationRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    result = RuleApplicabilityEngine(KnowledgeRepository(session), KnowledgeConfig()).evaluate(
+        RuleApplicabilityContext(**payload.model_dump())
+    )
+    return asdict(result)
 
 
 @router.get("/admin/dashboard", dependencies=[Depends(require_admin_key)])

@@ -148,7 +148,13 @@ class HybridKnowledgeSearch:
         query_vector = hashed_embedding(query, dimensions)
         retrieval = config["retrieval"]
         scored: list[
-            tuple[float, KnowledgeChunkORM, KnowledgeDocumentVersionORM, KnowledgeSourceORM]
+            tuple[
+                float,
+                int,
+                KnowledgeChunkORM,
+                KnowledgeDocumentVersionORM,
+                KnowledgeSourceORM,
+            ]
         ] = []
         for tokens, (chunk, version, source) in zip(documents, rows, strict=True):
             lexical = self._bm25(
@@ -162,14 +168,18 @@ class HybridKnowledgeSearch:
             )
             vector = max(0.0, cosine_similarity(chunk.embedding_json, query_vector))
             authority = source.quality_score / 100
+            hierarchy_rank = int(self._config.brain["source_hierarchy"].get(source.source_class, 0))
             score = (
                 lexical * float(retrieval["lexical_weight"])
                 + vector * float(retrieval["vector_weight"])
                 + authority * float(retrieval["authority_weight"])
+                + (hierarchy_rank / 100) * float(retrieval.get("source_hierarchy_weight", 0))
             )
             if score > 0:
-                scored.append((score, chunk, version, source))
-        scored.sort(key=lambda item: (-item[0], -item[3].quality_score, item[2].version_number))
+                scored.append((score, hierarchy_rank, chunk, version, source))
+        scored.sort(
+            key=lambda item: (-item[0], -item[1], -item[4].quality_score, item[3].version_number)
+        )
         return [
             KnowledgeSearchHit(
                 document_id=version.id,
@@ -184,8 +194,11 @@ class HybridKnowledgeSearch:
                 data_confidence=max(0, source.quality_score - (15 if version.ocr_derived else 0)),
                 content=chunk.content,
                 score=score,
+                collection=source.collection,
+                jurisdiction=str(source.taxonomy_json.get("jurisdiction", "UNKNOWN")),
+                verification_status=version.status,
             )
-            for score, chunk, version, source in scored[:limit]
+            for score, _hierarchy_rank, chunk, version, source in scored[:limit]
         ]
 
     @staticmethod
@@ -215,18 +228,28 @@ class HybridKnowledgeSearch:
 def route_knowledge_query(query: str) -> dict[str, Any]:
     normalized = normalize_text(query)
     routes: list[str] = []
+    domain_collections: list[str] = []
     filters: dict[str, str] = {}
-    for pattern, route, discipline in (
-        (r"kacis|yangin merdiv|sprinkler|duman", "FIRE", "fire"),
-        (r"radye|kazik|zemin|spt|cpt|iksa", "GEOTECHNICAL", "geotechnical"),
-        (r"demir|beton|kalip|statik|donati", "STRUCTURAL", "structural"),
-        (r"mantolama|poz|rayic|birim fiyat", "YFK_COST", "cost"),
-        (r"emsal|imar|taks|kaks|ruhsat", "ZONING", "architecture"),
-        (r"ifc|bim|ifcwall|ifcslab", "BIM", "bim"),
-        (r"cephe|mimari|plan", "ARCHITECTURE", "architecture"),
+    for pattern, route, discipline, domain in (
+        (r"kacis|yangin merdiv|sprinkler|duman", "FIRE", "fire", "FIRE"),
+        (r"radye|kazik|zemin|spt|cpt|iksa", "GEOTECHNICAL", "geotechnical", "GEOTECHNICAL"),
+        (r"demir|beton|kalip|statik|donati", "STRUCTURAL", "structural", "STRUCTURAL"),
+        (r"mantolama|poz|rayic|birim fiyat", "YFK_COST", "cost", "COST"),
+        (r"emsal|imar|taks|kaks|ruhsat", "ZONING", "architecture", "REGULATIONS"),
+        (r"ifc|bim|ifcwall|ifcslab", "BIM", "bim", "PROJECT"),
+        (r"cephe|mimari|plan", "ARCHITECTURE", "architecture", "ARCHITECTURE"),
+        (r"mekanik|havalandirma|boru|elektrik|priz|kablo|tesisat", "MEP", "mep", "MEP"),
+        (r"enerji|yalitim|bep|karbon|emisyon", "ENERGY", "energy", "ENERGY"),
+        (r"malzeme|cimento|celik|yalitim urunu", "MATERIALS", "materials", "MATERIALS"),
+        (r"santiye|gunluk rapor|ekipman|teslimat", "SITE", "site", "SITE"),
+        (r"isg|is guvenligi|kaza|ramak kala|risk", "HSE", "hse", "HSE"),
+        (r"kalite|ncr|uygunsuzluk|muayene|test sonucu", "QUALITY", "quality", "QUALITY"),
+        (r"is programi|kritik yol|cpm|aktivite|planlama", "PLANNING", "planning", "PLANNING"),
+        (r"sozlesme|hakedi[sş]|claim|varyasyon|teminat", "CONTRACT", "contract", "CONTRACT"),
     ):
         if re.search(pattern, normalized):
             routes.append(route)
+            domain_collections.append(domain)
             filters.setdefault("discipline", discipline)
     if re.search(r"ne kadar|metraj|m2|m²|ton", normalized):
         routes.append("ESTIMATION")
@@ -244,6 +267,7 @@ def route_knowledge_query(query: str) -> dict[str, Any]:
     return {
         "routes": list(dict.fromkeys(routes)),
         "collections": list(dict.fromkeys(collections)),
+        "domain_collections": list(dict.fromkeys(domain_collections)),
         "filters": filters,
     }
 
