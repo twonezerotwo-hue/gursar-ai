@@ -240,6 +240,7 @@ def create_schedule(
         "duration_days": result.duration_days,
         "peak_crew": result.peak_crew,
         "critical_path": list(result.critical_path),
+        "critical_paths": [list(path) for path in result.critical_paths],
         "assumptions": list(result.assumptions),
         "activities": [
             {
@@ -252,6 +253,7 @@ def create_schedule(
                 "late_start": item.late_start,
                 "late_finish": item.late_finish,
                 "total_float": item.total_float,
+                "free_float": item.free_float,
                 "critical": item.critical,
                 "crew_size": item.activity.crew_size,
             }

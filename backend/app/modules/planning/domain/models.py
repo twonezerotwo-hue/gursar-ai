@@ -38,6 +38,18 @@ class Activity:
 
 
 @dataclass(frozen=True, slots=True)
+class WbsNode:
+    code: str
+    name: str
+    parent_code: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkBreakdownStructure:
+    nodes: tuple[WbsNode, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ScheduledActivity:
     activity: Activity
     early_start: Decimal
@@ -46,6 +58,7 @@ class ScheduledActivity:
     late_finish: Decimal
     total_float: Decimal
     critical: bool
+    free_float: Decimal = Decimal("0")
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,4 +89,5 @@ class ScheduleResult:
     duration_days: Decimal
     peak_crew: int
     critical_path: tuple[str, ...]
+    critical_paths: tuple[tuple[str, ...], ...] = field(default_factory=tuple)
     assumptions: tuple[str, ...] = field(default_factory=tuple)

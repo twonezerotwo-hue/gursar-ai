@@ -476,6 +476,7 @@ class QuickQuoteService:
             "duration_days": str(result.duration_days),
             "peak_crew": result.peak_crew,
             "critical_path": list(result.critical_path),
+            "critical_paths": [list(path) for path in result.critical_paths],
             "activities": [
                 {
                     "id": item.activity.id,
@@ -485,6 +486,10 @@ class QuickQuoteService:
                     "crew_size": item.activity.crew_size,
                     "early_start": str(item.early_start),
                     "early_finish": str(item.early_finish),
+                    "late_start": str(item.late_start),
+                    "late_finish": str(item.late_finish),
+                    "total_float": str(item.total_float),
+                    "free_float": str(item.free_float),
                     "critical": item.critical,
                 }
                 for item in result.activities
