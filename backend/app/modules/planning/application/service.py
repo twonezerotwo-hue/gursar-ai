@@ -478,10 +478,18 @@ class ConstructionSchedulingService:
             ),
         )
         calculated = self._cpm.calculate(activities, self.WBS)
+        source_tiers = sorted({item.source_tier.value for item in self._productivity.values()})
+        provenance_assumption = (
+            "Kullanılan üretkenlik kayıtları HEURISTIC kaynaktır; doğrulanmış saha "
+            "gerçekleşmesi değildir."
+            if source_tiers == ["HEURISTIC"]
+            else "Üretkenlik kaynak sınıfları: " + ", ".join(source_tiers) + "."
+        )
         assumptions = (
             "Klasik betonarme konut ve normal çalışma koşulları esas alındı.",
             "Süreler yaklaşık planlama değeridir; onaylı proje metrajı değildir.",
             "Temelin tamamlandığı ve ekiplerin kesintisiz çalışabildiği varsayıldı.",
+            provenance_assumption,
         )
         return ScheduleResult(
             activities=calculated.activities,

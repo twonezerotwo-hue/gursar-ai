@@ -3,11 +3,12 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import NoReturn
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_session
+from app.core.persistence import append_audit
 from app.core.security import require_admin_key
 from app.modules.architecture_intelligence.application.service import ArchitectureAnalyzer
 from app.modules.architecture_intelligence.application.spatial import (
@@ -25,8 +26,18 @@ from app.modules.architecture_intelligence.domain.models import (
     SpatialGraphAnalysis,
     SpatialGraphInput,
 )
+from app.modules.planning.application.productivity import (
+    CrewPlanningService,
+    ProductivityPlanningError,
+)
 from app.modules.planning.application.service import ConstructionSchedulingService
-from app.modules.planning.domain.models import PlanningPriority, PlanningRequest
+from app.modules.planning.domain.models import (
+    CrewPlan,
+    PlanningPriority,
+    PlanningRequest,
+    ProductivityRecord,
+    ProductivitySourceTier,
+)
 from app.modules.planning.infrastructure.repository import ProductivityRepository
 
 router = APIRouter(
@@ -61,6 +72,40 @@ class ScheduleRequest(BaseModel):
     project_type: str = "RESIDENTIAL"
     priority: PlanningPriority = PlanningPriority.BALANCED
     available_crew: int | None = Field(default=None, gt=0)
+
+
+class ProductivityRecordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    service_code: str = Field(min_length=1, max_length=120)
+    work_type: str | None = Field(default=None, max_length=160)
+    unit: str = Field(min_length=1, max_length=30)
+    output_per_crew_day: Decimal = Field(gt=0)
+    crew_size: int = Field(gt=0, le=1_000)
+    crew_composition: dict[str, int] = Field(default_factory=dict)
+    sample_quantity: Decimal | None = Field(default=None, gt=0)
+    sample_duration_days: Decimal | None = Field(default=None, gt=0)
+    productive_hours: Decimal | None = Field(default=None, gt=0)
+    project_type: str = Field(default="RESIDENTIAL", min_length=1, max_length=60)
+    location: str | None = Field(default=None, max_length=240)
+    floor: str | None = Field(default=None, max_length=100)
+    conditions: str = Field(default="normal", min_length=1, max_length=500)
+    verified: bool = False
+    confidence: Decimal = Field(default=Decimal("0.5"), ge=0, le=1)
+    source_tier: ProductivitySourceTier = ProductivitySourceTier.HEURISTIC
+    source: str = Field(min_length=1, max_length=300)
+
+
+class CrewPlanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    service_code: str = Field(min_length=1, max_length=120)
+    quantity: Decimal = Field(gt=0)
+    unit: str = Field(min_length=1, max_length=30)
+    balanced_duration_days: Decimal = Field(gt=0)
+    project_type: str = Field(default="RESIDENTIAL", min_length=1, max_length=60)
+    location: str | None = Field(default=None, max_length=240)
+    max_workers: int | None = Field(default=None, gt=0, le=100_000)
 
 
 class ArchitecturalSpaceRequest(BaseModel):
@@ -262,21 +307,122 @@ def create_schedule(
     }
 
 
+@router.post("/productivity-records", status_code=status.HTTP_201_CREATED)
+def create_productivity_record(
+    payload: ProductivityRecordRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    record = ProductivityRecord(
+        **payload.model_dump(exclude={"crew_composition"}),
+        crew_composition=tuple(sorted(payload.crew_composition.items())),
+    )
+    try:
+        row = ProductivityRepository(session).add_version(record)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    append_audit(
+        session,
+        action="PRODUCTIVITY_RECORD_VERSION_CREATED",
+        aggregate_id=row.id,
+        detail={
+            "service_code": row.service_code,
+            "source_tier": row.source_tier,
+            "version": row.version,
+            "verified": row.verified,
+        },
+        actor_type="ADMIN",
+        actor_id="ADMIN_API",
+    )
+    return {"id": row.id, "version": row.version, **_productivity_response(record)}
+
+
 @router.get("/productivity-records")
-def list_productivity_records(session: Session = Depends(get_session)) -> dict:
-    records = ProductivityRepository(session).active_catalog()
+def list_productivity_records(
+    project_type: str = Query(default="RESIDENTIAL", min_length=1, max_length=60),
+    location: str | None = Query(default=None, max_length=240),
+    session: Session = Depends(get_session),
+) -> dict:
+    records = ProductivityRepository(session).active_catalog(project_type, location)
     return {
-        "records": [
-            {
-                "service_code": item.service_code,
-                "unit": item.unit,
-                "output_per_crew_day": item.output_per_crew_day,
-                "crew_size": item.crew_size,
-                "project_type": item.project_type,
-                "conditions": item.conditions,
-                "verified": item.verified,
-                "source": item.source,
-            }
-            for item in records.values()
-        ]
+        "records": [_productivity_response(item) for item in records.values()]
+    }
+
+
+@router.post("/productivity/crew-plan")
+def create_crew_plan(
+    payload: CrewPlanRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    record = ProductivityRepository(session).active_catalog(
+        payload.project_type, payload.location
+    ).get(payload.service_code)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PRODUCTIVITY_RECORD_NOT_FOUND",
+        )
+    try:
+        scenarios = CrewPlanningService().scenarios(
+            record,
+            quantity=payload.quantity,
+            unit=payload.unit,
+            balanced_duration_days=payload.balanced_duration_days,
+            max_workers=payload.max_workers,
+        )
+    except ProductivityPlanningError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    return {
+        "productivity": _productivity_response(record),
+        "scenarios": [_crew_plan_response(item) for item in scenarios],
+    }
+
+
+def _productivity_response(item: ProductivityRecord) -> dict:
+    return {
+        "service_code": item.service_code,
+        "work_type": item.work_type,
+        "unit": item.unit,
+        "output_per_crew_day": item.output_per_crew_day,
+        "crew_size": item.crew_size,
+        "crew_composition": dict(item.crew_composition),
+        "sample_quantity": item.sample_quantity,
+        "sample_duration_days": item.sample_duration_days,
+        "productive_hours": item.productive_hours,
+        "project_type": item.project_type,
+        "location": item.location,
+        "floor": item.floor,
+        "conditions": item.conditions,
+        "verified": item.verified,
+        "confidence": item.confidence,
+        "source_tier": item.source_tier.value,
+        "source": item.source,
+    }
+
+
+def _crew_plan_response(item: CrewPlan) -> dict:
+    return {
+        "priority": item.priority.value,
+        "service_code": item.service_code,
+        "quantity": item.quantity,
+        "unit": item.unit,
+        "target_duration_days": item.target_duration_days,
+        "crew_days": item.crew_days,
+        "required_crews": item.required_crews,
+        "required_workers": item.required_workers,
+        "planned_duration_days": item.planned_duration_days,
+        "daily_output": item.daily_output,
+        "crew_composition": dict(item.crew_composition),
+        "total_composition": dict(item.total_composition),
+        "source_tier": item.source_tier.value,
+        "source": item.source,
+        "confidence": item.confidence,
+        "verified": item.verified,
+        "risks": list(item.risks),
+        "assumptions": list(item.assumptions),
     }

@@ -18,6 +18,13 @@ class DependencyType(StrEnum):
     START_FINISH = "SF"
 
 
+class ProductivitySourceTier(StrEnum):
+    VERIFIED_PROJECT_ACTUAL = "VERIFIED_PROJECT_ACTUAL"
+    COMPANY_STANDARD = "COMPANY_STANDARD"
+    VERIFIED_REFERENCE = "VERIFIED_REFERENCE"
+    HEURISTIC = "HEURISTIC"
+
+
 @dataclass(frozen=True, slots=True)
 class ActivityDependency:
     predecessor_id: str
@@ -71,6 +78,37 @@ class ProductivityRecord:
     conditions: str
     verified: bool
     source: str
+    source_tier: ProductivitySourceTier = ProductivitySourceTier.HEURISTIC
+    work_type: str | None = None
+    crew_composition: tuple[tuple[str, int], ...] = ()
+    sample_quantity: Decimal | None = None
+    sample_duration_days: Decimal | None = None
+    productive_hours: Decimal | None = None
+    location: str | None = None
+    floor: str | None = None
+    confidence: Decimal = Decimal("0.5")
+
+
+@dataclass(frozen=True, slots=True)
+class CrewPlan:
+    priority: PlanningPriority
+    service_code: str
+    quantity: Decimal
+    unit: str
+    target_duration_days: Decimal
+    crew_days: Decimal
+    required_crews: int
+    required_workers: int
+    planned_duration_days: Decimal
+    daily_output: Decimal
+    crew_composition: tuple[tuple[str, int], ...]
+    total_composition: tuple[tuple[str, int], ...]
+    source_tier: ProductivitySourceTier
+    source: str
+    confidence: Decimal
+    verified: bool
+    risks: tuple[str, ...] = ()
+    assumptions: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
