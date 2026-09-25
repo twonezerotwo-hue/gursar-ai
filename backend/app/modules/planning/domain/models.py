@@ -42,6 +42,7 @@ class Activity:
     crew_size: int
     dependencies: tuple[ActivityDependency, ...] = ()
     element_types: tuple[str, ...] = ()
+    equipment_requirements: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

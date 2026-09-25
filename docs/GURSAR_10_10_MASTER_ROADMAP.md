@@ -1,11 +1,11 @@
 # GÜRSAR AI — Global Construction Intelligence Roadmap
 
-Current phase base commit: `16b7971`
+Current phase base commit: `405438e`
 
-Current phase: `PHASE 7B — Productivity and Crew Intelligence`
+Current phase: `PHASE 7C — Resource Loading, Actuals and 4D Linkage`
 
-Current overall simple score: `5.39 / 10`
-Weighted product-readiness score: `5.24 / 10`
+Current overall simple score: `5.48 / 10`
+Weighted product-readiness score: `5.37 / 10`
 
 Status values: `NOT_STARTED`, `FOUNDATION`, `FUNCTIONAL`, `VALIDATED`,
 `BLOCKED_BY_REAL_DATA`, `PRODUCTION_READY`. No area is production-ready without measured,
@@ -15,12 +15,12 @@ auditable, security-tested, documented, realistic-data evidence.
 
 | Category | Before | After | /10 target | Status | Evidence | Main remaining gap |
 |---|---:|---:|---:|---|---|---|
-| Backend / Domain Architecture | 7.7 | 7.8 | 10 | VALIDATED | Modular deterministic engines, reversible migrations and 267 regression tests | Distributed production validation |
-| Data Governance | 7.9 | 8.1 | 10 | VALIDATED | Immutable productivity versions, source tiers, audit and lineage | Retention and tenant policy |
+| Backend / Domain Architecture | 7.8 | 7.9 | 10 | VALIDATED | Resource engine, immutable schedule control, reversible migrations and 274 tests | Distributed production validation |
+| Data Governance | 8.1 | 8.2 | 10 | VALIDATED | Frozen baselines, append-only progress/delays, audit and lineage | Retention and tenant policy |
 | Security | 7.5 | 7.5 | 10 | VALIDATED | Ownership, RBAC, upload/license gates | Full threat model and penetration test |
 | RAG / Knowledge Infrastructure | 7.8 | 7.8 | 10 | VALIDATED | 17,379 chunks, bounded FTS/vector retrieval, hierarchy | pgvector production benchmark |
 | Construction Knowledge | 6.8 | 6.8 | 10 | FUNCTIONAL | Rule applicability, 17 domain routes, conflict/UNVERIFIED | Expert-validated multi-domain rule coverage |
-| BIM / IFC Intelligence | 7.5 | 7.5 | 10 | VALIDATED | Qto, geometry, evidence, relations | Broader real IFC suite and 4D/5D |
+| BIM / IFC Intelligence | 7.5 | 7.7 | 10 | VALIDATED | Verified BuildingElement-to-Activity 4D links plus IFC evidence | Floor/location 4D packaging and broader real IFC suite |
 | Vector PDF Intelligence | 7.0 | 7.0 | 10 | VALIDATED | Sheet/region/scale/vector evidence | Diverse real drawing benchmark |
 | DXF / CAD Intelligence | 7.2 | 7.2 | 10 | VALIDATED | Units, mappings, geometry, evidence | Office-standard and large-file validation |
 | Vision Infrastructure | 6.5 | 6.5 | 10 | FUNCTIONAL | Dataset, benchmark, shadow/review lifecycle | Diverse real labeled drawings |
@@ -30,8 +30,8 @@ auditable, security-tested, documented, realistic-data evidence.
 | Architecture Intelligence | 6.2 | 6.2 | 10 | FUNCTIONAL | Space/zone graph, adjacency, backend area, deterministic evidence-linked QA | Real drawing extraction, regulation packs and expert benchmark |
 | Structural Engineering | 5.8 | 5.8 | 10 | FUNCTIONAL | Shared structural graph, deterministic load-path checks, immutable loads and evidence | Rebar parser, code/solver adapters and engineer-reviewed real benchmark |
 | MEP Intelligence | 2.0 | 2.0 | 10 | FOUNDATION | Shared taxonomy and MEP knowledge route | Discipline graphs and verified takeoff |
-| Scheduling / Planning | 6.6 | 7.2 | 10 | FUNCTIONAL | Source-ranked productivity, deterministic crew-days/workers and FAST/BALANCED/ECONOMIC scenarios | Resource leveling, actuals and real-field calibration |
-| Site Management | 1.5 | 1.5 | 10 | NOT_STARTED | Site knowledge route only | Daily report, progress, RFI and issues |
+| Scheduling / Planning | 7.2 | 8.0 | 10 | FUNCTIONAL | Deterministic resource loading/leveling, frozen baselines, actuals, delay impact and 4D links | Calendars, multi-project leveling and real-field calibration |
+| Site Management | 1.5 | 2.2 | 10 | FOUNDATION | Append-only verified progress and categorized delay events | Daily report, RFI, inspections and production UI |
 | Safety / HSE | 1.7 | 1.7 | 10 | FOUNDATION | Domain routing and sourced-rule path | HSE records, deterministic risk engine |
 | Quality / QAQC | 1.7 | 1.7 | 10 | FOUNDATION | Domain routing and sourced-rule path | ITP, NCR, inspection and punch workflow |
 | Contract / Commercial | 2.1 | 2.1 | 10 | FOUNDATION | Contract routing, quote ledger | Contract/change/claim/payment engine |
@@ -39,7 +39,7 @@ auditable, security-tested, documented, realistic-data evidence.
 | Customer UX / Conversation | 6.3 | 6.4 | 10 | FUNCTIONAL | Context reuse, quick replies, CPM V2 details and schedule snapshots | Scenario comparison and progress journeys |
 | Continuous Learning | 6.0 | 6.0 | 10 | FUNCTIONAL | Review, active learning, versioned datasets | Actual site/cost/productivity feedback |
 | Production / SaaS | 4.5 | 4.5 | 10 | FOUNDATION | PostgreSQL compatibility, jobs, backup | Tenancy, observability, deployment hardening |
-| Global Product Readiness | 5.2 | 5.3 | 10 | FUNCTIONAL | Integrated deterministic CPM, provenance-aware productivity and crew scenario subsystem | Global real-project end-to-end validation |
+| Global Product Readiness | 5.3 | 5.5 | 10 | FUNCTIONAL | Integrated CPM, resource control, actuals, delay and 4D scheduling subsystem | Global real-project end-to-end validation |
 
 ## Completed phases
 
@@ -59,6 +59,9 @@ auditable, security-tested, documented, realistic-data evidence.
 6. Phase 7B Productivity and Crew Intelligence: immutable source-ranked productivity records,
    crew composition and field-sample metadata, deterministic crew-day/crew/worker sizing,
    workforce-cap risks, three scenarios, audit trail and explicit heuristic disclosure.
+7. Phase 7C Resource Loading, Actuals and 4D Linkage: deterministic workforce/equipment overload
+   detection and bounded leveling, frozen idempotent baselines, append-only progress and delay
+   intelligence, audit trail and verified ProjectGraph element linkage.
 
 ## Blocked areas
 
@@ -80,8 +83,8 @@ auditable, security-tested, documented, realistic-data evidence.
 - Structural graph changes require a dedicated immutable relationship-correction UX.
 - Bundled productivity inputs are still heuristic; the verified actual-output path now exists but
   needs completed-project field records.
-- Resource loading/leveling, equipment constraints, baselines, progress, delay events and 4D links
-  remain incomplete.
+- Resource calendars, shifts/holidays, multi-project leveling, floor/location 4D work packaging and
+  earned-value metrics remain incomplete.
 - Synthetic vision data has high duplicate-image concentration.
 - Starlette TestClient emits one upstream deprecation warning.
 
@@ -94,22 +97,23 @@ auditable, security-tested, documented, realistic-data evidence.
 
 ## Last validation
 
-- Tests: `267/267` passed for this phase checkpoint
+- Tests: `274/274` passed for this phase checkpoint
 - Knowledge chunks protected: `17,379`
-- Latest migration: `0022`
+- Latest migration: `0023`
 - Backup: `RESTORE_VALIDATED`, SQLite integrity check: `ok`
-- Benchmark: 10,000 three-scenario crew plan sets (30,000 scenarios) in 375.92 ms
-- Real-data benchmark: pending completed-project schedules and verified productivity actuals
+- Benchmark: 500 parallel activities, shared capacity 10, leveled in 282.41 ms; 490 shifts,
+  0 remaining overloads
+- Real-data benchmark: pending completed-project baselines, actuals and verified delay records
 
 ## Next highest priority phase
 
-`PHASE 7C — Resource Loading, Actuals and 4D Linkage`
+`PHASE 5B — Architecture Regulation and Drawing Integration`
 
-Deliver resource calendars/loading/leveling, equipment conflicts, schedule baselines, progress
-actuals, delay variance and Activity-to-BuildingElement linkage without hiding heuristic inputs.
+Connect verified architectural spaces and drawing regions to jurisdiction-aware deterministic rules,
+reviewable findings and architect-approved golden cases without inventing compliance conclusions.
 
 ## Next actions
 
-1. Import and review completed-project productivity actuals without changing historical versions.
-2. Add deterministic resource overload detection and bounded leveling.
-3. Add baseline/actual/forecast/delay records and 4D ProjectGraph activity linkage.
+1. Build architecture rule applicability packs on the existing knowledge hierarchy.
+2. Link verified ViewRegions/spaces to rule checks and immutable evidence.
+3. Prepare architect-reviewed golden cases; keep unvalidated rules explicitly `UNVERIFIED`.

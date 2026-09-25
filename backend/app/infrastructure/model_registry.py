@@ -59,7 +59,13 @@ from app.modules.knowledge_acquisition.infrastructure.models import (
     KnowledgeSourceORM,
 )
 from app.modules.legal_knowledge.infrastructure.models import LegalChunkORM, LegalDocumentORM
-from app.modules.planning.infrastructure.models import ProductivityRecordORM
+from app.modules.planning.infrastructure.models import (
+    ProductivityRecordORM,
+    ScheduleActivityElementLinkORM,
+    ScheduleBaselineORM,
+    ScheduleDelayEventORM,
+    ScheduleProgressUpdateORM,
+)
 from app.modules.pricing.infrastructure.models import PriceBookORM
 from app.modules.project_graph.infrastructure.models import (
     BlockSemanticMappingORM,
@@ -183,6 +189,10 @@ __all__ = [
     "RealDrawingImportORM",
     "ReviewDecisionORM",
     "ScaleCalibrationORM",
+    "ScheduleActivityElementLinkORM",
+    "ScheduleBaselineORM",
+    "ScheduleDelayEventORM",
+    "ScheduleProgressUpdateORM",
     "ServiceCatalogORM",
     "SheetMetadataRevisionORM",
     "SheetORM",

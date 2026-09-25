@@ -26,10 +26,16 @@ from app.modules.architecture_intelligence.domain.models import (
     SpatialGraphAnalysis,
     SpatialGraphInput,
 )
+from app.modules.planning.application.control import (
+    BaselineCreationResult,
+    ScheduleControlError,
+    ScheduleControlService,
+)
 from app.modules.planning.application.productivity import (
     CrewPlanningService,
     ProductivityPlanningError,
 )
+from app.modules.planning.application.resource import ResourcePlanningError
 from app.modules.planning.application.service import ConstructionSchedulingService
 from app.modules.planning.domain.models import (
     CrewPlan,
@@ -38,6 +44,8 @@ from app.modules.planning.domain.models import (
     ProductivityRecord,
     ProductivitySourceTier,
 )
+from app.modules.planning.domain.resource import DelayRootCause, ResourceCapacity, ResourceKind
+from app.modules.planning.infrastructure.models import ScheduleBaselineORM
 from app.modules.planning.infrastructure.repository import ProductivityRepository
 
 router = APIRouter(
@@ -106,6 +114,48 @@ class CrewPlanRequest(BaseModel):
     project_type: str = Field(default="RESIDENTIAL", min_length=1, max_length=60)
     location: str | None = Field(default=None, max_length=240)
     max_workers: int | None = Field(default=None, gt=0, le=100_000)
+
+
+class ResourceCapacityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1, max_length=120)
+    kind: ResourceKind
+    capacity: int = Field(gt=0, le=100_000)
+
+
+class ScheduleBaselineRequest(ScheduleRequest):
+    name: str = Field(default="Master Baseline", min_length=1, max_length=240)
+    location: str | None = Field(default=None, max_length=240)
+    resource_capacities: list[ResourceCapacityRequest] = Field(
+        default_factory=list, max_length=1_000
+    )
+    created_by: str = Field(default="SCHEDULE_ADMIN", min_length=1, max_length=200)
+
+
+class ProgressUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    activity_id: str = Field(min_length=1, max_length=80)
+    observed_day: Decimal = Field(ge=0)
+    actual_progress: Decimal = Field(ge=0, le=1)
+    actual_start_day: Decimal | None = Field(default=None, ge=0)
+    actual_finish_day: Decimal | None = Field(default=None, ge=0)
+    forecast_finish_day: Decimal | None = Field(default=None, ge=0)
+    source: str = Field(min_length=1, max_length=300)
+    verified: bool = False
+    notes: str | None = Field(default=None, max_length=2_000)
+
+
+class DelayEventRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    activity_id: str = Field(min_length=1, max_length=80)
+    root_cause: DelayRootCause
+    impact_days: Decimal = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=2_000)
+    verified: bool = False
+    created_by: str = Field(default="SCHEDULE_ADMIN", min_length=1, max_length=200)
 
 
 class ArchitecturalSpaceRequest(BaseModel):
@@ -425,4 +475,169 @@ def _crew_plan_response(item: CrewPlan) -> dict:
         "verified": item.verified,
         "risks": list(item.risks),
         "assumptions": list(item.assumptions),
+    }
+
+
+@router.post(
+    "/projects/{project_id}/schedule/baselines",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_schedule_baseline(
+    project_id: str,
+    payload: ScheduleBaselineRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    catalog = ProductivityRepository(session).active_catalog(
+        payload.project_type, payload.location
+    )
+    schedule = ConstructionSchedulingService(productivity=catalog or None).create(
+        PlanningRequest(
+            gross_area_m2=payload.gross_area_m2,
+            floor_count=payload.floor_count,
+            stage=payload.stage,
+            project_type=payload.project_type,
+            priority=payload.priority,
+            available_crew=payload.available_crew,
+        )
+    )
+    capacities = tuple(
+        ResourceCapacity(**item.model_dump()) for item in payload.resource_capacities
+    )
+    try:
+        result = ScheduleControlService(session).create_baseline(
+            project_id=project_id,
+            name=payload.name,
+            priority=payload.priority,
+            schedule=schedule,
+            capacities=capacities,
+            created_by=payload.created_by,
+        )
+    except (ScheduleControlError, ResourcePlanningError) as exc:
+        _raise_schedule_control(exc)
+    return _baseline_response(result)
+
+
+@router.get("/projects/{project_id}/schedule/baselines/latest")
+def get_latest_schedule_baseline(
+    project_id: str,
+    session: Session = Depends(get_session),
+) -> dict:
+    try:
+        baseline = ScheduleControlService(session).latest(project_id)
+    except ScheduleControlError as exc:
+        _raise_schedule_control(exc)
+    return _baseline_row_response(baseline)
+
+
+@router.post(
+    "/projects/{project_id}/schedule/baselines/{baseline_id}/progress",
+    status_code=status.HTTP_201_CREATED,
+)
+def record_schedule_progress(
+    project_id: str,
+    baseline_id: str,
+    payload: ProgressUpdateRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    try:
+        row, variance = ScheduleControlService(session).add_progress(
+            project_id=project_id,
+            baseline_id=baseline_id,
+            **payload.model_dump(),
+        )
+    except ScheduleControlError as exc:
+        _raise_schedule_control(exc)
+    return {
+        "id": row.id,
+        "baseline_id": row.baseline_id,
+        "activity_id": variance.activity_id,
+        "observed_day": variance.observed_day,
+        "planned_progress": variance.planned_progress,
+        "actual_progress": variance.actual_progress,
+        "progress_variance": variance.progress_variance,
+        "planned_finish_day": variance.planned_finish_day,
+        "forecast_finish_day": variance.forecast_finish_day,
+        "finish_variance_days": variance.finish_variance_days,
+        "verified": row.verified,
+    }
+
+
+@router.post(
+    "/projects/{project_id}/schedule/baselines/{baseline_id}/delays",
+    status_code=status.HTTP_201_CREATED,
+)
+def record_schedule_delay(
+    project_id: str,
+    baseline_id: str,
+    payload: DelayEventRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    try:
+        row = ScheduleControlService(session).add_delay(
+            project_id=project_id,
+            baseline_id=baseline_id,
+            **payload.model_dump(),
+        )
+    except ScheduleControlError as exc:
+        _raise_schedule_control(exc)
+    return {
+        "id": row.id,
+        "baseline_id": row.baseline_id,
+        "activity_id": row.activity_id,
+        "root_cause": row.root_cause,
+        "impact_days": row.impact_days,
+        "project_impact_days": row.project_impact_days,
+        "verified": row.verified,
+    }
+
+
+def _raise_schedule_control(exc: ValueError) -> NoReturn:
+    code = str(exc)
+    if code in {
+        "PROJECT_NOT_FOUND",
+        "SCHEDULE_BASELINE_NOT_FOUND",
+        "SCHEDULE_ACTIVITY_NOT_FOUND",
+    }:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=code) from exc
+    if code.startswith("RESOURCE_CAPACITY_INFEASIBLE"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=code) from exc
+    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=code) from exc
+
+
+def _baseline_response(result: BaselineCreationResult) -> dict:
+    return {
+        **_baseline_row_response(result.baseline),
+        "reused": result.reused,
+        "initial_overloads": [
+            {
+                "code": item.code,
+                "kind": item.kind.value,
+                "start_day": item.start_day,
+                "finish_day": item.finish_day,
+                "demand": item.demand,
+                "capacity": item.capacity,
+                "activity_ids": list(item.activity_ids),
+            }
+            for item in result.leveling.initial_overloads
+        ],
+        "remaining_overloads": len(result.leveling.remaining_overloads),
+        "shifted_activity_ids": list(result.leveling.shifted_activity_ids),
+        "building_element_link_count": result.link_count,
+    }
+
+
+def _baseline_row_response(row: ScheduleBaselineORM) -> dict:
+    return {
+        "id": row.id,
+        "project_id": row.project_id,
+        "name": row.name,
+        "version": row.version,
+        "priority": row.priority,
+        "duration_days": row.duration_days,
+        "status": row.status,
+        "analysis_version": row.analysis_version,
+        "input_checksum": row.input_checksum,
+        "activities": row.activities_json,
+        "resource_capacities": row.capacities_json,
+        "assumptions": row.assumptions_json,
     }
